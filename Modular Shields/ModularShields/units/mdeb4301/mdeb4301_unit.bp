@@ -1,0 +1,5 @@
+UnitBlueprint {
+    BlueprintId = 'mdeb4301',
+    ScriptClass = 'MDEB4301',
+    Categories = { 'UEF', 'STRUCTURE' },
+}

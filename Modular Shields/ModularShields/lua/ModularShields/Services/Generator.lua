@@ -1,0 +1,178 @@
+local root = '/mods/ModularShields/lua/ModularShields/'
+local R = import(root .. 'Runtime.lua').Export
+local Jobs = import(root .. 'Services/InstallJobs.lua').Export
+local Shield = import(root .. 'Adapters/Shield.lua').Export
+local Adjacency = import(root .. 'Adapters/Adjacency.lua').Export
+local Repair = import(root .. 'Behaviors/Repair.lua').Export
+local Combat = import(root .. 'Services/Combat.lua').Export
+local Transfer = import(root .. 'Services/Transfer.lua').Export
+local Ground = import(root .. 'Behaviors/GroundBarrier.lua').Export
+local function MakeGenerator(Base)
+    return ClassUnit(Base) {
+        OnStopBeingBuilt = function(self, builder, layer)
+            local inherited=builder and builder.Loadout and builder.ModuleUpgrading and Transfer.Snapshot(builder,true)
+            Base.OnStopBeingBuilt(self,builder,layer)
+            local bp = self.Blueprint
+            self.Loadout = R.Core.New(bp.ModularShield.Chassis, {
+                Mass = bp.Economy.BuildCostMass, Energy = bp.Economy.BuildCostEnergy,
+                Upkeep = bp.Economy.MaintenanceConsumptionPerSecondEnergy,
+                ShieldMaxHP = bp.Defense.Shield.ShieldMaxHealth,
+                ShieldSize = bp.Defense.Shield.ShieldSize, ShieldRegen = bp.Defense.Shield.ShieldRegenRate,
+            })
+            self.Loadout.Rules = R.Core
+            self:ReconcileModules()
+            if inherited then Transfer.Restore(self,inherited) end
+            Combat.Register(self)
+            Jobs.Start(self,R)
+            self:ForkThread(function()
+                WaitTicks(math.mod(self.EntityId, 10) + 1)
+                while not self.Dead do
+                    self:ReconcileModules()
+                    Repair.Tick(self,R)
+                    WaitTicks(10)
+                end
+            end)
+        end,
+        ReconcileModules = function(self)
+            if not self.Loadout then return end
+            local caps,effects = R.Neighbors.Evaluate(R.Registry,Adjacency.Snapshot(self,R.Registry),self.Loadout.Installed)
+            self.Loadout.Capabilities = caps
+            self.ModuleStats = R.Stats.Calculate(self.Loadout,R.Registry,R.Config,effects)
+            Shield.Apply(self,self.ModuleStats)
+            Combat.Invalidate()
+            self:UpdateBarrierState()
+            self:PublishModules()
+        end,
+        UpdateBarrierState=function(self)
+            if not self.Loadout then return end
+            local reason
+            if not self.ModuleStats.Capabilities.ground_barrier then
+                reason=self.ModuleStats.Dormant.impenetrable or 'NotInstalled'
+            elseif not Combat.Operational(self) then reason='ShieldDown'
+            elseif self:GetAIBrain().EnergyDepleted or self:GetAIBrain():GetEconomyStored('ENERGY')<=0 then reason='NoPower'
+            elseif not self.Loadout.Capabilities.legendary_power_support then reason='MissingAdjacentPower' end
+            if reason then
+                self.BarrierActive=false;self.BarrierReadyTick=nil;self.BarrierRecords=nil;self.BarrierReason=reason
+            else
+                self.BarrierReadyTick=self.BarrierReadyTick or (GetGameTick()+R.Config.Barrier.WarmupTicks)
+                self.BarrierActive=GetGameTick()>=self.BarrierReadyTick
+                self.BarrierReason=self.BarrierActive and 'Active' or 'WarmingUp'
+            end
+        end,
+        TickBarrier=function(self)
+            local before=self.BarrierReason
+            self:UpdateBarrierState()
+            Ground.Tick(self,R.Config.Barrier)
+            if before~=self.BarrierReason then Combat.Invalidate();self:PublishModules() end
+        end,
+        PublishModules = function(self)
+            if not self.Loadout then return end
+            local s, rows = self.Loadout, {}
+            for _, id in ipairs(R.Registry.Order) do
+                local reason = R.Core.Eligible(s,id,R.Registry,R.Config,true)
+                local quote = s.Installed[id] and s.Installed[id].Quote or R.Core.Quote(s,id,R.Registry,R.Config)
+                rows[table.getn(rows)+1] = { Id = id, Name = R.Registry.Modules[id].UI.Name,
+                    Installed = s.Installed[id] ~= nil, Reason = reason and reason.Code,
+                    Detail = reason and (reason.Module or reason.Behavior), Quote = quote }
+            end
+            local job = s.Queue[1]
+            self.Sync.ModularShield = { Used = R.Core.Used(s,R.Registry), Slots = R.Config.Chassis[s.Chassis].Slots,
+                Rows = rows, Stats = self.ModuleStats, LastReason = self.ModuleReason,
+                InstallPaused = self.InstallPaused or false, RepairPaused = self.RepairPaused or false,
+                Assistants=self.ModuleAssistantCount or 0, WorkRate=self.ModuleWorkRate or R.Config.InstallRate,
+                Upgrading=self.ModuleUpgrading or false, Barrier=self.BarrierReason,
+                ActualEnergy=self:GetConsumptionPerSecondEnergy(),
+                NativeAdjacency=self.EnergyMaintAdjMod or 1,
+                Queue=table.deepcopy(s.Queue), RepairMass=self.ModuleRepairMass or 0,
+                Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,
+                    Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } }
+        end,
+        RequestModuleInstall = function(self,id)
+            if not self.Loadout or self.Dead then return end
+            if self.ModuleUpgrading then return nil,{Code='ChassisUpgrading'} end
+            local job,reason = R.Core.RequestInstall(self.Loadout,id,R.Registry,R.Config)
+            self.ModuleReason = reason and (reason.Code..(reason.Module and ': '..reason.Module or ''))
+            Jobs.Start(self,R); self:PublishModules()
+            return job,reason
+        end,
+        ModuleAction = function(self,action,value)
+            if not self.Loadout or self.Dead then return end
+            if action == 'install' and type(value) == 'string' then return self:RequestModuleInstall(value) end
+            local reason
+            if action == 'remove' and type(value) == 'string' then
+                Jobs.Stop(self); reason = R.Core.RequestRemove(self.Loadout,value,R.Registry)
+            elseif action == 'cancel' and type(value) == 'number' then
+                Jobs.Stop(self); reason = R.Core.RequestCancel(self.Loadout,value,R.Registry)
+            elseif action == 'pause' then
+                self.InstallPaused = not self.InstallPaused
+                if self.InstallPaused then Jobs.Stop(self) end
+                if self.Loadout.Queue[1] then self.Loadout.Queue[1].State = self.InstallPaused and 'Paused' or 'Queued' end
+            elseif action == 'repair' then self.RepairPaused = not self.RepairPaused end
+            self.ModuleReason = reason and (reason.Code..(reason.Module and ': '..reason.Module or ''))
+            self:ReconcileModules(); Jobs.Start(self,R)
+            return reason
+        end,
+        OnAdjacentTo = function(self,other,trigger)
+            Base.OnAdjacentTo(self,other,trigger); self:ReconcileModules()
+        end,
+        OnNotAdjacentTo = function(self,other)
+            self.BarrierActive=false;self.BarrierRecords=nil;self.BarrierReadyTick=nil
+            Base.OnNotAdjacentTo(self,other); self:ReconcileModules()
+        end,
+        OnShieldDisabled=function(self)
+            self.BarrierActive=false;self.BarrierRecords=nil;self.BarrierReadyTick=nil
+            Base.OnShieldDisabled(self)
+            if self.Loadout then self:UpdateBarrierState();self:PublishModules() end
+        end,
+        OnShieldEnabled=function(self)
+            Base.OnShieldEnabled(self)
+            if self.Loadout then self:UpdateBarrierState();self:PublishModules() end
+        end,
+        OnStartBuild=function(self,built,order)
+            if order=='Upgrade' and built.Blueprint.ModularShield then
+                Jobs.Stop(self);self.ModuleUpgrading=true
+                self.BarrierActive=false;self.BarrierRecords=nil
+            end
+            local result=Base.OnStartBuild(self,built,order)
+            if result==false then self.ModuleUpgrading=false;Jobs.Start(self,R) end
+            return result
+        end,
+        UpgradingState=State(Base.UpgradingState) {
+            OnStopBuild=function(self,built,order)
+                if built:GetFractionComplete()==1 and built.Loadout then
+                    -- Refresh the shield snapshot at completion, not upgrade start.
+                    -- Native code may finish the new unit before this callback.
+                    Transfer.Restore(built,Transfer.Snapshot(self,true))
+                    Jobs.Start(built,R)
+                end
+                Base.UpgradingState.OnStopBuild(self,built,order)
+            end,
+            OnFailedToBuild=function(self)
+                self.ModuleUpgrading=false
+                Base.UpgradingState.OnFailedToBuild(self)
+                self:ReconcileModules();Jobs.Start(self,R)
+            end,
+        },
+        OnGiven = function(self,newUnit)
+            Jobs.Stop(self)
+            if newUnit.Loadout then Transfer.Restore(newUnit,self.TransferSnapshot or Transfer.Snapshot(self,false)) end
+            Base.OnGiven(self,newUnit)
+        end,
+        OnDestroy = function(self)
+            Jobs.Stop(self)
+            Combat.Unregister(self)
+            self.BarrierActive=false;self.BarrierRecords=nil
+            if self.IsBeingTransferred then self.TransferSnapshot=Transfer.Snapshot(self,false) end
+            Base.OnDestroy(self)
+        end,
+        OnKilled = function(self,instigator,damageType,overkillRatio)
+            Jobs.Stop(self)
+            Combat.Unregister(self)
+            self.BarrierActive=false;self.BarrierRecords=nil
+            Base.OnKilled(self,instigator,damageType,overkillRatio)
+        end,
+    }
+end
+Export = { MakeGenerator = MakeGenerator }
+
+return Export

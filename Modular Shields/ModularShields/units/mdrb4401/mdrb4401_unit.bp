@@ -1,0 +1,5 @@
+UnitBlueprint {
+    BlueprintId = 'mdrb4401',
+    ScriptClass = 'MDRB4401',
+    Categories = { 'CYBRAN', 'STRUCTURE' },
+}

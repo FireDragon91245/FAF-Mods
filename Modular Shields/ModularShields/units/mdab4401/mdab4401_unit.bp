@@ -1,0 +1,5 @@
+UnitBlueprint {
+    BlueprintId = 'mdab4401',
+    ScriptClass = 'MDAB4401',
+    Categories = { 'AEON', 'STRUCTURE' },
+}

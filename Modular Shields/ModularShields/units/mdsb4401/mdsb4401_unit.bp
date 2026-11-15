@@ -1,0 +1,5 @@
+UnitBlueprint {
+    BlueprintId = 'mdsb4401',
+    ScriptClass = 'MDSB4401',
+    Categories = { 'SERAPHIM', 'STRUCTURE' },
+}
