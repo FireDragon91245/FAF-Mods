@@ -35,6 +35,8 @@ Select one modular generator to open its panel. Click an eligible module to queu
 installation. Click an installed module to remove it. Removing equipment is free,
 gives no refund and is rejected while an installed dependent still needs it.
 The panel reports the dependent ID. Use the queue tab to cancel any pending job.
+Module fitting/removal uses the native buttons in the side panel; the bottom
+command bar provides the chassis upgrade. Locked module buttons show their reason.
 
 T3 has four slots; T4 has eight. Power, Range, Regen and Repair each have five
 incremental levels. Every completed level occupies its own slot, retains its own
@@ -168,5 +170,7 @@ This runs pure rules, adapter/economy, blueprint and gameplay/lifecycle checks, 
 parses every Lua/blueprint source. The engine mocks cover once-only interceptions,
 paid work and starvation, assistant release, body bounce/breakup, deferred cargo,
 upgrade transfer, ground behavior, neighbor rules and legendary activation.
+UI checks also exercise native-control layout, persistent buttons and the secured
+simulation callback for fitting, removal, cancellation and pausing.
 
 Follow PLAYTEST.md in FAF before making gameplay, multiplayer or performance claims.

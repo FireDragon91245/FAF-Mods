@@ -16,6 +16,8 @@ local function Classify(p)
     local bp=p.Blueprint or {}
     local c=bp.CategoriesHash or {}
     local id=string.lower(bp.BlueprintId or '')
+    -- Effect controllers share the Projectile base but are not combat threats.
+    if string.find(id,'/effects/',1,true) then return nil end
     id=string.gsub(id,'.*/','');id=string.gsub(id,'_proj%.bp$','')
     if c.HELPER or c.ANTIMISSILE then return nil end
     if (c.STRATEGIC and c.MISSILE) or c.TACTICALNUKE or (p.InnerRing and p.OuterRing) then return 'nuclear' end
@@ -147,9 +149,18 @@ Export={Operational=Operational,Classify=Classify,Damage=Damage,Resolve=Resolve,
     Register=function(host) hosts[host.EntityId]=host;candidateTick=nil;Start() end,
     Unregister=function(host) hosts[host.EntityId]=nil;candidateTick=nil end,
     Track=function(p)
-        if Classify(p) then projectiles[p.EntityId]=p;p.ModularPrevious=G.Copy(p:GetPosition()) end
+        if not Classify(p) then return end
+        -- Projectile.OnCreate caches Army/Blueprint, but not EntityId (unlike Unit).
+        local id=p.ModularTrackId or p.EntityId or p:GetEntityId()
+        if not id then return end
+        p.ModularTrackId=id
+        projectiles[id]=p
+        p.ModularPrevious=G.Copy(p:GetPosition())
     end,
-    Forget=function(p) projectiles[p.EntityId]=nil end,
+    Forget=function(p)
+        local id=p.ModularTrackId
+        if id then projectiles[id]=nil;p.ModularTrackId=nil end
+    end,
     GroundExterior=function(u,p)
         for _,host in pairs(hosts) do
             if host.BarrierActive and Operational(host) and IsEnemy(host.Army,u.Army) then

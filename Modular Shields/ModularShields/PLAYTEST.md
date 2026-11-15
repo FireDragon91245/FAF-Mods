@@ -1,6 +1,10 @@
 # FAF playtest checklist
 
-In-game status: **not run yet**. All built-in features are implemented and enabled.
+Native engine smoke checks now pass for generator creation, real projectile
+registration/destruction, native module-button construction/handler dispatch and
+resource-paid installation progress. An engine frame export also shows the test
+enemy ground model rendering. Full interactive combat/playtesting is still pending.
+All built-in features are implemented and enabled.
 Record FAF release, map, other mods, replay path, logs and measured results here.
 AI compatibility means identical behavior against AI/player units and weapons;
 AI shield construction/planning is outside the requested scope.
