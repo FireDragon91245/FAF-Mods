@@ -1,4 +1,6 @@
-local function finite(n) return type(n) == 'number' and n == n and n > -math.huge and n < math.huge end
+-- FAF RuleInit has no math.huge. For any finite number n-n is zero;
+-- either infinity produces NaN, which compares unequal to zero.
+local function finite(n) return type(n) == 'number' and n == n and n - n == 0 end
 local function positive(n, label, zero)
     assert(finite(n) and (zero and n >= 0 or n > 0), 'Invalid ' .. label)
 end

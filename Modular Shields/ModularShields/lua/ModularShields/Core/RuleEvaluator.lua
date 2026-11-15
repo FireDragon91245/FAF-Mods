@@ -62,7 +62,8 @@ local function Evaluate(registry,facts,installed)
     local effects={}
     for _,key in ipairs(order) do
         local g=groups[key]
-        g.Value=math.max(g.Minimum or -math.huge,math.min(g.Maximum or math.huge,g.Value))
+        if g.Minimum and g.Value<g.Minimum then g.Value=g.Minimum end
+        if g.Maximum and g.Value>g.Maximum then g.Value=g.Maximum end
         effects[table.getn(effects)+1]={Stat=g.Stat,Op=g.Op,Value=g.Value}
     end
     return caps,effects
