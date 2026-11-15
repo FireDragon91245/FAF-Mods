@@ -29,9 +29,9 @@ function ModBlueprints(all)
             bp.Economy.BuildRate = R.Config.InstallRate
             bp.General.CommandCaps = bp.General.CommandCaps or {}
             bp.General.CommandCaps.RULEUCC_Pause = true
+            bp.General.CommandCaps.RULEUCC_Stop = true
             if tier == 3 then
                 bp.General.UpgradesTo = faction.Prefix .. '4401'
-                bp.General.CommandCaps.RULEUCC_Upgrade = true
                 bp.Economy.BuildableCategory = { faction.Prefix .. '4401' }
             else
                 bp.General.UpgradesFrom = faction.Prefix .. '4301'
@@ -44,7 +44,6 @@ function ModBlueprints(all)
                 'BUILTBYTIER3ENGINEER', 'BUILTBYTIER3COMMANDER', 'MODULARSHIELD', tier == 3 and 'TECH3' or 'EXPERIMENTAL' }
             bp.CategoriesHash = table.hash(bp.Categories)
             bp.TechCategory = tier == 3 and 'TECH3' or 'EXPERIMENTAL'
-            bp.General.Icon = faction.Base
             local scale = tier == 3 and 1 or 3
             bp.Economy.BuildCostMass = original.Economy.BuildCostMass * scale
             bp.Economy.BuildCostEnergy = original.Economy.BuildCostEnergy * scale
