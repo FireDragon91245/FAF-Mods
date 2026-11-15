@@ -55,6 +55,8 @@ AI shield construction/planning is outside the requested scope.
 1. On T4 fit the three special prerequisites, add true edge-adjacent completed power
    or energy storage, then install Impenetrable. A nearby object without actual edge
    adjacency and another army's provider must not qualify.
+   Check the panel's adjacent-power count with T2/T3 power and energy storage,
+   including cheat-spawned providers and providers built before/after the shield.
 2. Watch three-second activation warmup. Remove/capture/destroy support, empty power,
    toggle/collapse the shield and restore each condition. Paid legendary remains
    installed/dormant and requires a new warmup before reactivation.

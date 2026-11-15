@@ -33,9 +33,16 @@ local function MakeGenerator(Base)
                 end
             end)
         end,
-        ReconcileModules = function(self)
+        ReconcileModules = function(self,excludedNeighbor)
             if not self.Loadout then return end
-            local caps,effects = R.Neighbors.Evaluate(R.Registry,Adjacency.Snapshot(self,R.Registry),self.Loadout.Installed)
+            local facts=Adjacency.Snapshot(self,R.Registry,R.Config,excludedNeighbor)
+            self.ModulePowerProviders=0
+            for _,fact in ipairs(facts) do
+                if fact.SameArmy and fact.Completed and fact.EdgeAdjacent and (fact.Tags.power_generator or fact.Tags.energy_storage) then
+                    self.ModulePowerProviders=self.ModulePowerProviders+1
+                end
+            end
+            local caps,effects = R.Neighbors.Evaluate(R.Registry,facts,self.Loadout.Installed)
             self.Loadout.Capabilities = caps
             self.ModuleStats = R.Stats.Calculate(self.Loadout,R.Registry,R.Config,effects)
             Shield.Apply(self,self.ModuleStats)
@@ -83,6 +90,7 @@ local function MakeGenerator(Base)
                 Upgrading=self.ModuleUpgrading or false, Barrier=self.BarrierReason,
                 ActualEnergy=self:GetConsumptionPerSecondEnergy(),
                 NativeAdjacency=self.EnergyMaintAdjMod or 1,
+                PowerProviders=self.ModulePowerProviders or 0,
                 Queue=table.deepcopy(s.Queue), RepairMass=self.ModuleRepairMass or 0,
                 Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,
                     Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } }
@@ -117,7 +125,9 @@ local function MakeGenerator(Base)
         end,
         OnNotAdjacentTo = function(self,other)
             self.BarrierActive=false;self.BarrierRecords=nil;self.BarrierReadyTick=nil
-            Base.OnNotAdjacentTo(self,other); self:ReconcileModules()
+            self.AdjacentUnits=self.AdjacentUnits or {}
+            other.AdjacentUnits=other.AdjacentUnits or {}
+            Base.OnNotAdjacentTo(self,other); self:ReconcileModules(other)
         end,
         OnShieldDisabled=function(self)
             self.BarrierActive=false;self.BarrierRecords=nil;self.BarrierReadyTick=nil

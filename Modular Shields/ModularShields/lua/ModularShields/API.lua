@@ -32,7 +32,7 @@ local function PreviewLoadout(host, ids)
     for _, id in ipairs(ids) do
         if pending[id] then return nil,R.Core.Eligible(state,id,R.Registry,R.Config,false) end
     end
-    local facts=import('/mods/ModularShields/lua/ModularShields/Adapters/Adjacency.lua').Export.Snapshot(host,R.Registry)
+    local facts=import('/mods/ModularShields/lua/ModularShields/Adapters/Adjacency.lua').Export.Snapshot(host,R.Registry,R.Config)
     local caps,effects=R.Neighbors.Evaluate(R.Registry,facts,state.Installed)
     state.Capabilities=caps
     return R.Stats.Calculate(state,R.Registry,R.Config,effects)

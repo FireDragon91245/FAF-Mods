@@ -28,7 +28,7 @@ end
 local function Create(state,entityId)
     local parent=GetFrame(0)
     local panel=Group(parent,'Modular Shield Panel')
-    panel.Width:Set(460);panel.Height:Set(680)
+    panel.Width:Set(460);panel.Height:Set(700)
     -- Above the world view; do not let its input surface steal module clicks.
     panel.Depth:Set(100)
     L.AtRightTopIn(panel,parent,12,50)
@@ -114,6 +114,7 @@ local function Create(state,entityId)
     v.Assist=text(panel,8,614)
     v.Barrier=text(panel,8,632)
     v.Reason=text(panel,8,650)
+    v.Power=text(panel,8,670)
     SetText(v.Hint,'Hover a button for its cost, work and continuing upkeep.')
     return v
 end
@@ -166,6 +167,7 @@ local function Update()
     SetText(v.Assist,string.format('Assistants: %d | work: %.1f/s | draw: %.0f E/s',state.Assistants,state.WorkRate,state.ActualEnergy))
     SetText(v.Barrier,string.format('Barrier: %s | repair: %.2f M/s',state.Barrier or 'NotInstalled',state.RepairMass))
     SetText(v.Reason,state.LastReason or (state.Upgrading and 'Chassis upgrade: module work retained and paused.' or 'Module buttons above; chassis upgrade in the native command bar.'))
+    SetText(v.Power,string.format('Adjacent power support: %d completed own provider(s)',state.PowerProviders or 0))
 end
 
 Export={Update=Update}

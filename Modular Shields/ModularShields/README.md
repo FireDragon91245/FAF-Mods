@@ -109,6 +109,14 @@ up for three seconds, then enables broad projectile interception and ground deni
 Support loss, power loss, shield collapse and destruction deactivate the barrier.
 Restoration requires a fresh warmup.
 
+T1, T2 and T3 power generators qualify, as does energy storage. Complete the
+structure and place it with its green build footprint sharing a side with the
+generator footprint: corner-only contact, a gap, or merely being under the dome
+does not qualify. The panel's adjacent-power count reports detected providers.
+Physical skirt edges are reconciled once per second as well as on native events,
+including cheat-spawned structures and events received before construction completes.
+The stock SIZE category is preserved for normal FAF power-adjacency discounts.
+
 Ground denial returns enemy mobile land/seabed units to their last safe exterior
 position, or chooses a pathable, unoccupied exterior point. It runs every simulation
 tick, accounts for unit size, checks observed swept crossings, and avoids placing a

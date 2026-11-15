@@ -42,6 +42,11 @@ function ModBlueprints(all)
             bp.Categories = { faction.Name, 'STRUCTURE', 'LAND', 'SHIELD', 'DEFENSE', 'SELECTABLE',
                 'RECLAIMABLE', 'VISIBLETORECON', 'OVERLAYDEFENSE', 'SORTDEFENSE',
                 'BUILTBYTIER3ENGINEER', 'BUILTBYTIER3COMMANDER', 'MODULARSHIELD', tier == 3 and 'TECH3' or 'EXPERIMENTAL' }
+            -- Native power adjacency buffs select receivers using SIZE categories.
+            -- Both modular tiers retain the original footprint/skirt, so keep its size tag.
+            for _,category in ipairs(original.Categories or {}) do
+                if string.find(category,'^SIZE%d+$') then table.insert(bp.Categories,category) end
+            end
             bp.CategoriesHash = table.hash(bp.Categories)
             bp.TechCategory = tier == 3 and 'TECH3' or 'EXPERIMENTAL'
             local scale = tier == 3 and 1 or 3
