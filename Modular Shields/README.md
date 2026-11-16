@@ -235,7 +235,7 @@ No spent resources are refunded and no assistants remain claimed by the old host
 `src/lua/ModularShields/Config.lua` owns capacities, costs/work profiles, safety limits,
 repair coefficients, feature switches, bounce policy, reflection allowlist and barrier
 warmup/scan settings. All feature switches default to enabled; empirical validation
-is recorded in PLAYTEST.md rather than used to disable implementation.
+is recorded in docs/PLAYTEST.md rather than used to disable implementation.
 
 Definitions use stable IDs in `Definitions/Modules.lua`. Add a stat module there with
 its quote, prerequisites and presentation hints. Explicit package manifests are
@@ -270,4 +270,4 @@ UI checks also exercise image layout, persistent controls and the secured
 simulation callback for fitting, removal, cancellation and pausing, including FAF's
 recursive unit-data merge and cleanup of completed/cancelled queue controls.
 
-Follow PLAYTEST.md in FAF before making gameplay, multiplayer or performance claims.
+Follow docs/PLAYTEST.md in FAF before making gameplay, multiplayer or performance claims.
