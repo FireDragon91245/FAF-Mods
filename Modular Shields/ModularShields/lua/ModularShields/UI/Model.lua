@@ -7,12 +7,15 @@ local Descriptions={
     deflector={'Deflects crashing aircraft and selected','slow projectiles away from the shield.'},
     atomized={'Contains intercepted nuclear explosions.','The shield absorbs the blast damage.'},
     ballistic={'Intercepts hostile missiles and rockets,','including supported shield-bypassing weapons.'},
-    impenetrable={'Blocks hostile ground units and projectiles.','Needs adjacent power and a shield warmup.'},
+    impenetrable={'Blocks hostile ground units and projectiles.','Ground impacts cost shield HP by unit weight.'},
+    regen={'Works continuously, including under fire.','Vanilla and power bonuses wait for no damage.'},
 }
 local Reasons={NoFreeSlot='All module slots are reserved.',WrongChassis='Requires a T4 generator.',
-    MissingModule='Requires module',MissingAdjacentPower='Requires completed edge-adjacent power.',
+    MissingModule='Requires module',MissingAdjacentPower='Requires an edge-adjacent T2+ generator.',
     AlreadyQueued='Already in the installation queue.',DependentModule='Required by module',
     ChassisUpgrading='Module work pauses during chassis upgrading.',NotInstalled='Module is not installed.'}
+Reasons.OverCapacity='Not enough slots; restore adjacent mass storage.'
+Reasons.DependencyInactive='A required module is dormant.'
 local function Reason(code,detail)
     local _,_,parsed,tail=string.find(code or '','^([^:]+):%s*(.*)$')
     if parsed then code=parsed;detail=detail or tail end
@@ -55,7 +58,8 @@ local function Tooltip(entry,state)
     add(Title(row),row.Family=='power' and Colors.HP or (row.Family=='range' and Colors.Range or
         ((row.Family=='regen' or row.Family=='repair') and Colors.Regen or Colors.Special)))
     if job then add((job.Kind=='Remove' and 'Removing: ' or 'Installing: ')..string.format('%.0f%%',100*job.PaidWork/job.Quote.Work)..
-        ((job.State=='Queued' or job.State=='Paused') and ' ('..job.State..')' or ''),Colors.Cost)
+        (job.State=='WaitingForSlots' and ' (waiting for module capacity)' or
+        ((job.State=='Queued' or job.State=='Paused') and ' ('..job.State..')' or '')),Colors.Cost)
     else add(row.Installed and 'Installed module' or 'Available upgrade',Colors.Muted) end
     local d=row.Deltas or {}
     local sign=row.Installed and -1 or 1
@@ -64,7 +68,19 @@ local function Tooltip(entry,state)
     if d.ShieldRegen and d.ShieldRegen~=0 then add(string.format('%+.0f shield HP / second',sign*d.ShieldRegen)..suffix,Colors.Regen) end
     if d.ShieldSize and d.ShieldSize~=0 then add(string.format('%+.1f shield radius',sign*d.ShieldSize/2)..suffix,Colors.Range) end
     if d.RepairBudget and d.RepairBudget~=0 then add(string.format('%+.0f structure HP / second',sign*d.RepairBudget)..suffix,Colors.Regen) end
-    for _,text in ipairs(Descriptions[row.Family] or {}) do add(text,Colors.Special) end
+    for _,text in ipairs(Descriptions[row.Family] or {}) do add(text,row.Family=='regen' and Colors.Regen or Colors.Special) end
+    if row.Id=='impenetrable' then
+        add('Requires ALL installed special modules:',Colors.Special)
+        for _,required in ipairs({'deflector','atomized','ballistic'}) do
+            local installed=false
+            for _,other in ipairs(state.Rows) do if other.Id==required then installed=other.Installed end end
+            add((installed and '[ready] ' or '[missing] ')..({deflector='Deflector',atomized='Atomized (nuclear containment)',ballistic='Ballistic (missile defense)'})[required],Colors.Special)
+        end
+        add('T4 + completed own T2+ power generator.',Colors.Special)
+        add('Share a footprint edge; corners do not count.',Colors.Muted)
+        add('T1 generators and all storage are excluded.',Colors.Muted)
+        add('Powered dome; 3s warmup after support returns.',Colors.Muted)
+    end
     if d.Upkeep then add(string.format('%+.0f energy / second upkeep',sign*d.Upkeep)..suffix,Colors.Cost) end
     if row.Installed then
         local dormant=state.Stats.Dormant[row.Id]

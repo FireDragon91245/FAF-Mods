@@ -20,9 +20,13 @@ local function Classify(p)
     if string.find(id,'/effects/',1,true) then return nil end
     id=string.gsub(id,'.*/','');id=string.gsub(id,'_proj%.bp$','')
     if c.HELPER or c.ANTIMISSILE then return nil end
-    if (c.STRATEGIC and c.MISSILE) or c.TACTICALNUKE or (p.InnerRing and p.OuterRing) then return 'nuclear' end
-    if c.MISSILE or c.ROCKET or R.Config.Projectiles.BallisticIds[id] then return 'ballistic' end
+    local data=p.DamageData or {}
+    if (c.STRATEGIC and c.MISSILE) or c.TACTICALNUKE or (p.InnerRing and p.OuterRing)
+        or (data.NukeInnerRingDamage or 0)>0 or (data.NukeOuterRingDamage or 0)>0 then return 'nuclear' end
     if R.Config.Projectiles.ReflectIds[id] then return 'reflect' end
+    if R.Config.Projectiles.ReflectArtillery and not c.ANTIAIR and not c.MISSILE and not c.ROCKET
+        and (c.ARTILLERY or c.INDIRECTFIRE or (bp.General or {}).Category=='Artillery') then return 'reflect' end
+    if c.MISSILE or c.ROCKET or R.Config.Projectiles.BallisticIds[id] then return 'ballistic' end
     return 'ordinary'
 end
 local function Supports(host,kind)

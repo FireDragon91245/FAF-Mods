@@ -118,7 +118,7 @@ local function Rate(host,config)
     host.ModuleAssistants=host.ModuleAssistants or {}
     if host.ModuleUpgrading then ReleaseAll(host);return config.InstallRate end
     local job=host.Loadout and host.Loadout.Queue[1]
-    local working=job and not host.InstallPaused
+    local working=job and job.State~='WaitingForSlots' and not host.InstallPaused
     local candidates={}
     for _,u in ipairs(host:GetGuards() or {}) do candidates[u.EntityId]=u end
     for id,u in pairs(host.Repairers or {}) do candidates[id]=u end

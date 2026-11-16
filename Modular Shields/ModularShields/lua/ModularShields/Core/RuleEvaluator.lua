@@ -41,6 +41,10 @@ local function Evaluate(registry,facts,installed)
                 scale=0
                 for n=1,count do scale=scale+(rule.Diminishing or 1)^(n-1) end
             end
+            if rule.ScaleBy then
+                scale=0
+                for n=1,count do scale=scale+math.max(0,matches[n][rule.ScaleBy] or 0) end
+            end
             for _,e in ipairs(rule.Effects) do
                 if e.Capability then caps[e.Capability]=e.Value
                 else

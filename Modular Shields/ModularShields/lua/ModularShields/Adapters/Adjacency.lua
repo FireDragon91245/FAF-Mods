@@ -12,7 +12,7 @@ local function EdgeAdjacent(a,b,tolerance)
     return (touchesX and overlapZ>tolerance) or (touchesZ and overlapX>tolerance)
 end
 
-local function Tags(bp,registry)
+local function Tags(bp,registry,production)
     local tags={}
     local categories=bp.CategoriesHash or {}
     for tag,definition in pairs(registry.Providers) do
@@ -24,7 +24,7 @@ local function Tags(bp,registry)
             for _,category in ipairs(definition.AnyCategories) do if categories[category] then found=true end end
             matches=matches and found
         end
-        if matches and (not definition.PositiveEnergyProduction or ((bp.Economy or {}).ProductionPerSecondEnergy or 0)>0) then
+        if matches and (not definition.PositiveEnergyProduction or (production or ((bp.Economy or {}).ProductionPerSecondEnergy or 0))>0) then
             tags[tag]=true
         end
     end
@@ -57,7 +57,9 @@ local function Snapshot(host,registry,config,excluded)
                 local skirt=Skirt(neighbor)
                 if bounds and skirt and EdgeAdjacent(bounds,skirt,config.NeighborEdgeTolerance or .05) then
                     local cats=bp.CategoriesHash or {}
-                    facts[table.getn(facts)+1]={Id=id,Tags=Tags(bp,registry),EdgeAdjacent=true,
+                    local production=(bp.Economy or {}).ProductionPerSecondEnergy or 0
+                    if neighbor.GetProductionPerSecondEnergy then production=neighbor:GetProductionPerSecondEnergy() end
+                    facts[table.getn(facts)+1]={Id=id,Tags=Tags(bp,registry,production),EdgeAdjacent=true,EnergyProduction=math.max(0,production),
                         SameArmy=neighbor.Army==host.Army,Completed=neighbor:GetFractionComplete()==1,
                         Tier=cats.EXPERIMENTAL and 't4' or cats.TECH3 and 't3' or cats.TECH2 and 't2' or 't1'}
                 end

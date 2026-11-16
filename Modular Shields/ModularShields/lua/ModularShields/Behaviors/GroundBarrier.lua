@@ -1,4 +1,5 @@
 local G=import('/mods/ModularShields/lua/ModularShields/Core/Geometry.lua').Export
+local Impact=import('/mods/ModularShields/lua/ModularShields/Adapters/Impact.lua').Export
 local function Radius(u) return math.max(u.Blueprint.SizeX or 1,u.Blueprint.SizeZ or 1)/2 end
 local function Safe(u,p)
     if not u:CanPathTo(p) then return false end
@@ -18,7 +19,15 @@ local function Safe(u,p)
 end
 local function Push(u,record,center,radius,config)
     local p=u:GetPosition()
-    if record.Outside and Safe(u,record.Outside) then Warp(u,record.Outside);return true end
+    local speed=(u.Blueprint.Physics or {}).MaxSpeed or 2
+    local distance=math.max(config.MinimumPush,speed*config.ReturnSeconds)
+    local minimum=radius+Radius(u)+config.Clearance+distance
+    if record.Outside then
+        local q=record.Outside
+        if (q[1]-center[1])*(q[1]-center[1])+(q[3]-center[3])*(q[3]-center[3])>=minimum*minimum and Safe(u,q) then
+            Warp(u,q);return true
+        end
+    end
     local dx,dz=p[1]-center[1],p[3]-center[3]
     local d=math.sqrt(dx*dx+dz*dz)
     if d<.01 then dx,dz,d=1,0,1 end
@@ -27,13 +36,23 @@ local function Push(u,record,center,radius,config)
     for _,extra in ipairs({0,3,7,12}) do
         for _,offset in ipairs(offsets) do
             local a=angle+offset
-            local rr=radius+Radius(u)+config.Clearance+extra
+            local rr=minimum+extra
             local x,z=center[1]+math.cos(a)*rr,center[3]+math.sin(a)*rr
             local q={x,math.max(GetTerrainHeight(x,z),GetSurfaceHeight(x,z)),z}
             if Safe(u,q) then Warp(u,q);record.Outside=G.Copy(q);return true end
         end
     end
     return false
+end
+local function Charge(host,u,position,center,config)
+    local tick=GetGameTick()
+    u.ModularBarrierHits=u.ModularBarrierHits or {}
+    for id,untilTick in pairs(u.ModularBarrierHits) do if untilTick<=tick then u.ModularBarrierHits[id]=nil end end
+    if u.ModularBarrierHits[host.EntityId] then return end
+    u.ModularBarrierHits[host.EntityId]=tick+config.HitCooldownTicks
+    local weight=(u.Blueprint.Physics or {}).Mass or (u.Blueprint.Economy or {}).BuildCostMass or 1
+    local damage=math.max(config.MinimumDamage,weight*config.DamagePerMass)
+    Impact.Apply(host.MyShield,u,damage,{center[1]-position[1],center[2]-position[2],center[3]-position[3]})
 end
 local function Tick(host,config)
     if not host.BarrierActive then host.BarrierRecords=nil;return end
@@ -56,10 +75,15 @@ local function Tick(host,config)
                 record={InsideAllowed=initial and inside,Position=G.Copy(p)}
                 host.BarrierRecords[id]=record
             end
-            if not inside then record.InsideAllowed=false
-            elseif not record.InsideAllowed then Push(u,record,center,radius,config) end
-            if not record.InsideAllowed and G.Entry(record.Position,p,center,radius+Radius(u),true) then
-                Push(u,record,center,radius,config)
+            if not inside then record.InsideAllowed=false end
+            local crossed=not record.InsideAllowed and G.Entry(record.Position,p,center,radius+Radius(u),true)
+            if (inside and not record.InsideAllowed) or crossed then
+                if Push(u,record,center,radius,config) then
+                    Charge(host,u,p,center,config)
+                    if host.MyShield:GetHealth()<=0 or host.MyShield.DisallowCollisions or not host.MyShield:IsUp() then
+                        host.BarrierActive=false;host.BarrierRecords=nil;return
+                    end
+                end
             elseif not inside then record.Outside=G.Copy(p) end
             record.Position=G.Copy(u:GetPosition())
         end

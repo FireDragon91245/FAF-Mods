@@ -30,6 +30,7 @@ local function MakeGenerator(Base)
                 while not self.Dead do
                     local before=self.ModuleAssistantCount
                     Assist.Rate(self,R.Config)
+                    Shield.TickRegen(self)
                     if math.mod(GetGameTick(),2)==0 then self.Sync.ModularShieldLive=Telemetry.Snapshot(self) end
                     if before~=self.ModuleAssistantCount then self:PublishModules() end
                     WaitTicks(1)
@@ -48,15 +49,23 @@ local function MakeGenerator(Base)
             if not self.Loadout then return end
             local facts=Adjacency.Snapshot(self,R.Registry,R.Config,excludedNeighbor)
             self.ModulePowerProviders=0
+            self.ModuleNeighbors={Power=0,Production=0,EnergyStorage=0,MassStorage=0}
             for _,fact in ipairs(facts) do
-                if fact.SameArmy and fact.Completed and fact.EdgeAdjacent and (fact.Tags.power_generator or fact.Tags.energy_storage) then
-                    self.ModulePowerProviders=self.ModulePowerProviders+1
+                if fact.SameArmy and fact.Completed and fact.EdgeAdjacent then
+                    if fact.Tags.power_generator then
+                        self.ModuleNeighbors.Power=self.ModuleNeighbors.Power+1
+                        self.ModuleNeighbors.Production=self.ModuleNeighbors.Production+(fact.EnergyProduction or 0)
+                        if fact.Tier~='t1' then self.ModulePowerProviders=self.ModulePowerProviders+1 end
+                    end
+                    if fact.Tags.energy_storage then self.ModuleNeighbors.EnergyStorage=self.ModuleNeighbors.EnergyStorage+1 end
+                    if fact.Tags.mass_storage then self.ModuleNeighbors.MassStorage=self.ModuleNeighbors.MassStorage+1 end
                 end
             end
             local caps,effects = R.Neighbors.Evaluate(R.Registry,facts,self.Loadout.Installed)
             self.Loadout.Capabilities = caps
             self.ModuleNeighborEffects=effects
             self.ModuleStats = R.Stats.Calculate(self.Loadout,R.Registry,R.Config,effects)
+            self.Loadout.BonusSlots=math.max(0,math.floor(self.ModuleStats.ModuleSlots-R.Config.Chassis[self.Loadout.Chassis].Slots))
             Shield.Apply(self,self.ModuleStats)
             Combat.Invalidate()
             self:UpdateBarrierState()
@@ -95,16 +104,35 @@ local function MakeGenerator(Base)
                 local definition=R.Registry.Modules[id]
                 local reason = R.Core.Eligible(s,id,R.Registry,R.Config,true)
                 local quote = s.Installed[id] and s.Installed[id].Quote or R.Core.Quote(s,id,R.Registry,R.Config)
-                local hypothetical={Base=s.Base,Installed={},Capabilities=s.Capabilities,Rules=R.Core}
+                local hypothetical={Base=s.Base,Chassis=s.Chassis,Installed={},Capabilities=s.Capabilities,Rules=R.Core}
                 for key,value in pairs(s.Installed) do hypothetical.Installed[key]=value end
-                hypothetical.Installed[id]=not s.Installed[id] and {Id=id,Quote=quote} or nil
+                local baseline=self.ModuleStats
+                if not s.Installed[id] then
+                    -- Preview the candidate after its queued prerequisites finish,
+                    -- without counting unrelated queued upgrades as its benefit.
+                    local function prerequisites(moduleId)
+                        for _,required in ipairs((R.Registry.Modules[moduleId].Requires or {}).AllModules or {}) do
+                            if not hypothetical.Installed[required] then
+                                for _,pending in ipairs(s.Queue) do
+                                    if pending.Kind~='Remove' and pending.ModuleId==required then
+                                        prerequisites(required)
+                                        hypothetical.Installed[required]={Id=required,Quote=pending.Quote}
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    prerequisites(id)
+                    baseline=R.Stats.Calculate(hypothetical,R.Registry,R.Config,self.ModuleNeighborEffects)
+                    hypothetical.Installed[id]={Id=id,Quote=quote}
+                else hypothetical.Installed[id]=nil end
                 local preview=R.Stats.Calculate(hypothetical,R.Registry,R.Config,self.ModuleNeighborEffects)
                 local deltas={}
                 for _,stat in ipairs({'ShieldMaxHP','ShieldSize','ShieldRegen','RepairBudget','Upkeep'}) do
-                    deltas[stat]=(preview[stat]-self.ModuleStats[stat])*(s.Installed[id] and -1 or 1)
+                    deltas[stat]=(preview[stat]-baseline[stat])*(s.Installed[id] and -1 or 1)
                 end
                 rows[table.getn(rows)+1] = { Id = id, Name = R.Registry.Modules[id].UI.Name,
-                    Family=definition.Family,Level=definition.Level,Deltas=deltas,Behavior=definition.Behavior or false,
+                    Family=definition.Family,Level=definition.Level,Deltas=deltas,Behavior=definition.Behavior or false,Requires=definition.Requires,
                     Installed = s.Installed[id] ~= nil, Reason = reason and reason.Code or false,
                     RemoveReason=s.Installed[id] and R.Core.CanUninstall(s,id,R.Registry) or false,
                     Detail = reason and (reason.Module or reason.Behavior) or false, Quote = quote }
@@ -112,7 +140,8 @@ local function MakeGenerator(Base)
             self.ModuleRows=rows;self.ModuleRowsRevision=s.Revision;self.ModuleRowsStats=self.ModuleStats
             end
             local job = s.Queue[1]
-            self.Sync.ModularShield = { Used = R.Core.Used(s,R.Registry), Slots = R.Config.Chassis[s.Chassis].Slots,
+            self.Sync.ModularShield = { Used = R.Core.Used(s,R.Registry), Slots = R.Core.Capacity(s,R.Config),
+                BaseSlots=R.Config.Chassis[s.Chassis].Slots,BonusSlots=s.BonusSlots or 0,Neighbors=self.ModuleNeighbors,
                 Faction=self.Blueprint.ModularShield.Faction,RemovalSeconds=R.Config.RemovalSeconds,
                 Rows = rows, Stats = self.ModuleStats, LastReason = self.ModuleReason or false,
                 InstallPaused = self.InstallPaused or false, RepairPaused = self.RepairPaused or false,
@@ -139,8 +168,16 @@ local function MakeGenerator(Base)
             if action == 'install' and type(value) == 'string' then return self:RequestModuleInstall(value) end
             local reason
             if action == 'remove' and type(value) == 'string' then
+                local blocked=self.Loadout.Queue[1] and self.Loadout.Queue[1].State=='WaitingForSlots'
                 local job
                 job,reason=R.Core.RequestUninstall(self.Loadout,value,R.Registry,R.Config)
+                if job and blocked then
+                    -- Let a removal free capacity ahead of a suspended install.
+                    -- Stop first so the old coroutine cannot commit out of order.
+                    Jobs.Stop(self)
+                    table.remove(self.Loadout.Queue,table.getn(self.Loadout.Queue))
+                    table.insert(self.Loadout.Queue,1,job)
+                end
             elseif action == 'cancel' and type(value) == 'number' then
                 Jobs.Stop(self); reason = R.Core.RequestCancel(self.Loadout,value,R.Registry)
             elseif action == 'pause' then

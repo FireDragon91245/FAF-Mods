@@ -6,7 +6,9 @@ local function Apply(host, stats)
         s:SetMaxHealth(stats.ShieldMaxHP)
         s:SetHealth(host, math.min(health, stats.ShieldMaxHP))
         s.Size = stats.ShieldSize
-        s.RegenRate = stats.ShieldRegen
+        -- The native thread supplies only regeneration that requires no recent
+        -- damage. Module regeneration is applied independently every sim tick.
+        s.RegenRate = (stats.BaseRegen or stats.ShieldRegen)+(stats.NeighborRegen or 0)
         if s:IsUp() then
             s:SetCollisionShape('Sphere', 0, 0, 0, s.Size / 2)
             s:SetDrawScale(s.Size)
@@ -23,6 +25,15 @@ local function Apply(host, stats)
     host:SetEnergyMaintenanceConsumptionOverride(stats.Upkeep)
     host:UpdateConsumptionValues()
 end
-Export = { Apply = Apply }
+local function TickRegen(host)
+    local s=host.MyShield
+    local rate=host.ModuleStats and host.ModuleStats.ModuleRegen or 0
+    if rate<=0 or not s or IsDestroyed(s) or not s:IsUp() then return end
+    local hp=s:GetHealth()
+    if hp<=0 or hp>=s:GetMaxHealth() then return end
+    s:SetHealth(host,math.min(s:GetMaxHealth(),hp+rate/10))
+    s:UpdateShieldRatio(-1)
+end
+Export = { Apply = Apply,TickRegen=TickRegen }
 
 return Export

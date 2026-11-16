@@ -58,10 +58,16 @@ not AI imagery. Rebuild them with `python scripts/generate_module_icons.py` (Pil
 96 SVG sources go to `artifacts/module-icons/svg`, and 192 full-color/dim DDS assets
 go into the mod. No reference-mod or stock artwork is redistributed.
 
-T3 has four slots; T4 has eight. Power, Range, Regen and Repair each have five
+T3 has four base slots; T4 has eight. Each completed, own edge-adjacent mass
+storage adds one slot. Power, Range, Regen and Repair each have five
 incremental levels. Every completed level occupies its own slot, retains its own
 quoted upkeep and requires the previous level. Pending jobs reserve slots too.
-Power I-IV fills T3; Power V requires T4. Nothing grants free capacity healing.
+Power I-IV fills an unsupported T3; attached mass storage can make room for V.
+Nothing grants free capacity healing. Losing storage retains paid modules, but excess modules become dormant in a stable
+prerequisite-aware order; restoring capacity reactivates them. Extra
+queued installations wait for actual free capacity and retain paid progress; a
+removal can run ahead of a waiting install to free a slot. The equipped icons wrap
+into extra rows when more than eight modules are fitted.
 
 Installations spend normal mass and energy through native economy events. The
 scripted work backend samples actual fulfillment and counts only paid work.
@@ -82,7 +88,11 @@ survives pausing; cancellation gives no refund. Effects and recurring upkeep beg
 together at completion. Install and repair-aura pause controls are separate from
 the native shield toggle. Existing shield absorption and regeneration continue.
 
-Power adds shield HP; Range changes diameter; Regen changes active regeneration.
+Power adds shield HP; Range changes diameter. Regen modules continuously repair
+an operational shield, including while taking damage. Vanilla chassis regeneration
+and neighboring generator bonuses resume only after the native damage delay.
+All three source rows report actual current HP/s, so full/offline shields show zero.
+The three HP rows separately show base, module and storage capacity contributions.
 All effects use the immutable chassis baseline. Stats update the existing shield's
 HP ceiling, collision sphere, meshes, regeneration and overlap-search diameter.
 Current HP is clamped without filling newly added capacity or resetting damage delay.
@@ -104,11 +114,14 @@ body's remaining crash damage is suppressed immediately, even if the first hit
 collapses the shield. Deferred transport cargo death paths are marked for containment.
 Shield impact ripples are guaranteed even when native cosmetic throttling skips one.
 
-The Deflector also physically reflects the explicitly configured slow projectiles:
-Aeon ADFRocket01, UEF TIFArtillery01, Cybran CIFArtillery01, and Seraphim
-SIFThunthoArtilleryShell01/02. Reflection disables tracking/turning, preserves original
-attacker ownership and ordinary damage/friendly-fire rules, and has a short
-recollision cooldown. Deflected shots remain capable of ordinary damage elsewhere.
+The Deflector physically reflects non-nuclear ground-artillery shells across all
+four factions, including indirect-fire mortar, fragmentation, cluster, sensor,
+heavy/experimental and naval artillery families. Anti-air flak, missiles/rockets and
+nuclear shells retain their own interception policies; the explicit ADFRocket01
+reflection exception remains supported. Concrete impact/split guards cover the
+expanded stock shell families. Reflection preserves original attacker ownership,
+ordinary damage/friendly-fire rules and a short recontact cooldown. Reflected shots
+can damage other targets normally.
 
 **Atomized:** intercepts strategic nuclear missiles, tactical nukes and projectiles
 with nuclear rings. It claims the interception once, disables collision/tracking,
@@ -126,19 +139,28 @@ scripts run before faction-specific splitting or impact effects. Unintercepted
 weapons and ordinary shields retain their normal behavior.
 
 **Impenetrable:** T4-only, requires Deflector, Atomized, Ballistic and a completed
-same-army edge-adjacent energy generator/storage. The paid module remains installed
+same-army edge-adjacent T2-or-higher power generator. Energy storage and T1
+generators do not satisfy this requirement. The paid module remains installed
 and dormant when support is lost. While powered with an operational dome, it warms
 up for three seconds, then enables broad projectile interception and ground denial.
 Support loss, power loss, shield collapse and destruction deactivate the barrier.
 Restoration requires a fresh warmup.
 
-T1, T2 and T3 power generators qualify, as does energy storage. Complete the
-structure and place it with its green build footprint sharing a side with the
-generator footprint: corner-only contact, a gap, or merely being under the dome
-does not qualify. The panel's adjacent-power count reports detected providers.
-Physical skirt edges are reconciled once per second as well as on native events,
-including cheat-spawned structures and events received before construction completes.
-The stock SIZE category is preserved for normal FAF power-adjacency discounts.
+Power support requires a completed own T2, T3 or experimental energy generator,
+with positive production, sharing a physical skirt edge with the shield. Corners,
+gaps, mere proximity under the dome, other-army generators, T1 power and all storage
+do not qualify. The Impenetrable hover popup lists Deflector, Atomized and Ballistic
+separately, each with installed/missing state, plus T4, adjacency and warmup rules.
+
+All completed, same-army edge-adjacent power generators (including T1 for this bonus)
+add non-combat shield regeneration based on live energy production: 0.01 HP/s per
+energy/s, so 800 energy/s adds 8 HP/s and 2000 adds 20 HP/s. Each energy storage adds
+10% of immutable chassis shield capacity. Each mass storage adds one module slot.
+Balance these values in `Definitions/NeighborRules.lua`; the existing stat caps
+still apply. Normal native power-adjacency upkeep discounts remain active and are
+not applied a second time. The dock shows provider counts, live energy production,
+base/extra slots, the upkeep multiplier and the separate effective HP/regen sources.
+Physical edges are reconciled once per second and on native adjacency events.
 
 Ground denial returns enemy mobile land/seabed units to their last safe exterior
 position, or chooses a pathable, unoccupied exterior point. It runs every simulation
@@ -146,8 +168,13 @@ tick, accounts for unit size, checks observed swept crossings, and avoids placin
 unit inside another active hostile barrier. Units inside on activation/radius change
 can leave; after leaving they cannot re-enter. Newly observed enemy teleport/unload
 arrivals inside are ejected. Friends retain access. Naval/air movement is unaffected.
-Movement commands remain intact, so repeated move orders can visibly push against
-the field. This is a scripted force field, with no native pathfinding wall.
+Each successful enemy push charges shield HP proportional to physical mass, or
+blueprint mass cost when no physical mass is defined: max(5, mass * 0.05). The shield
+impact effect plays. Outward displacement targets about 1.5 seconds of walking
+plus clearance, using the unit's maximum speed. Each unit/host pair can charge only
+once per 15 ticks; repeated forced contact still ejects units during that cooldown.
+A collapsed shield stops pushing immediately. Tune these values in Config.Barrier.
+Movement commands remain intact. This is a scripted field, with no pathfinding wall.
 
 All threat decisions use army hostility and live shield capabilities. There is no
 human/AI controller distinction, hidden-intel scan or enemy command manipulation.
@@ -185,8 +212,8 @@ provider tags, distinct physical providers, tier/module filters, thresholds, cou
 caps, diminishing contributions, additive/min/max/exclusive stacking groups and effect
 bounds. Effects can modify bounded shield stats, energy upkeep and repair mass
 coefficients. Rule inputs are snapshots, avoiding feedback loops. Extra generator,
-energy-storage and mass-storage bonuses are configurable, and none are enabled by
-default beyond the legendary power-support requirement.
+energy-storage and mass-storage bonuses are enabled by default as described above;
+production-weighted scaling is supported in declarative neighbor rules.
 
 Third-party custom death paths and custom projectiles can require additional adapters.
 The supported baseline is the installed FAF source audited in research/sources.json;

@@ -19,6 +19,13 @@ local function Used(s, r)
     for _, job in ipairs(s.Queue) do if job.Kind~='Remove' then n = n + r.Modules[job.ModuleId].Slots end end
     return n
 end
+local function Capacity(s,config) return config.Chassis[s.Chassis].Slots+(s.BonusSlots or 0) end
+local function CanWork(s,job,r,config)
+    if job.Kind=='Remove' then return true end
+    local occupied=0
+    for id in pairs(s.Installed) do occupied=occupied+r.Modules[id].Slots end
+    return occupied+r.Modules[job.ModuleId].Slots<=Capacity(s,config)
+end
 local function Quote(s, id, r, config)
     local d, b = r.Modules[id], s.Base
     if not d then return nil end
@@ -45,7 +52,7 @@ local function Eligible(s, id, r, config, includeQueue)
         if job.ModuleId == id then return { Code = 'AlreadyQueued' } end
         if includeQueue then installed[job.ModuleId] = job.Kind~='Remove' or nil end
     end
-    if Used(s, r) + d.Slots > config.Chassis[s.Chassis].Slots then return { Code = 'NoFreeSlot' } end
+    if Used(s, r) + d.Slots > Capacity(s,config) then return { Code = 'NoFreeSlot' } end
     return Requirements(d.Requires, installed, s.Capabilities)
 end
 local function Request(s, id, r, config)
@@ -134,13 +141,13 @@ local function Complete(s, job, r, config)
     local d = r.Modules[job.ModuleId]
     local reason = Requirements(d.Requires, s.Installed, s.Capabilities)
     if reason then return reason end
-    if s.Installed[d.Id] or Used(s,r) > config.Chassis[s.Chassis].Slots then return { Code = 'InvalidReservation' } end
+    if s.Installed[d.Id] or not CanWork(s,job,r,config) then return { Code = 'InvalidReservation' } end
     s.Installed[d.Id] = { Id = d.Id, Quote = job.Quote }
     job.State = 'Completed'; table.remove(s.Queue,1); s.Revision = s.Revision + 1
 end
 Export = { New = function(chassis, base) return { Chassis = chassis, Base = base, Installed = {}, Queue = {},
     Capabilities = {}, NextJob = 0, Revision = 0 } end,
-    Requirements = Requirements, Used = Used, Quote = Quote, Eligible = Eligible,
+    Requirements = Requirements, Used = Used, Capacity=Capacity, CanWork=CanWork, Quote = Quote, Eligible = Eligible,
     RequestInstall = Request, RequestRemove = Remove, RequestUninstall=RequestUninstall,
     CanRemove=CanRemove, CanUninstall=CanUninstall, RequestCancel = Cancel, Complete = Complete }
 

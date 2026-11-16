@@ -12,7 +12,7 @@ local function Build(config, packages, load)
     positive(config.RepairFactor,'repair mass factor')
     for _,chassis in pairs(config.Chassis) do positive(chassis.Slots,'chassis slots');assert(math.mod(chassis.Slots,1)==0,'Nonintegral slot capacity') end
     for stat,cap in pairs(config.Caps) do positive(cap,stat..' cap') end
-    local r = { Modules = {}, Order = {}, Providers = {}, Rules = {} }
+    local r = { Modules = {}, Order = {}, ActivationOrder={}, Providers = {}, Rules = {} }
     local handlers = { repair = true, deflector = true, atomized = true, ballistic = true, ground_barrier = true }
     local packageIds = {}
     table.sort(packages, function(a,b) if a.Priority == b.Priority then return a.Id < b.Id end return a.Priority < b.Priority end)
@@ -40,6 +40,7 @@ local function Build(config, packages, load)
             r.Providers[d.Id] = d
         end
         for _, rule in ipairs(load(p.Rules)) do
+            assert(not rule.ScaleBy or rule.ScaleBy=='EnergyProduction','Invalid neighbor scaling field')
             assert(rule.Relation == 'EdgeAdjacent' and rule.Ownership == 'SameArmy', 'Unsupported relation')
             positive(rule.Minimum, 'rule threshold')
             assert(math.mod(rule.Minimum,1)==0,'Nonintegral provider threshold')
@@ -73,7 +74,7 @@ local function Build(config, packages, load)
         for _, dep in ipairs((r.Modules[id].Requires or {}).AllModules or {}) do visit(dep) end
         for _, dep in ipairs((r.Modules[id].Requires or {}).AnyModules or {}) do visit(dep) end
         for _, dep in ipairs((r.Modules[id].Requires or {}).Excludes or {}) do assert(r.Modules[dep],'Missing exclusion '..dep) end
-        visiting[id] = nil; visited[id] = true
+        visiting[id] = nil; visited[id] = true;table.insert(r.ActivationOrder,id)
     end
     table.sort(r.Order)
     for _, id in ipairs(r.Order) do visit(id) end

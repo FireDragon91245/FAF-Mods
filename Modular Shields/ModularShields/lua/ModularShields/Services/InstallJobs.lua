@@ -21,6 +21,13 @@ local function Stop(host)
     Assist.Stop(host)
     UpdateProgress(host)
 end
+local function WaitForCapacity(host,R,job)
+    if job.Kind=='Remove' then return end
+    while not R.Core.CanWork(host.Loadout,job,R.Registry,R.Config) do
+        job.State='WaitingForSlots';Assist.Stop(host);PublishProgress(host,false);WaitTicks(1)
+    end
+    job.State='Building'
+end
 local function Start(host,R)
     if host.ModuleThread or host.InstallPaused or host.ModuleUpgrading or table.getn(host.Loadout.Queue)==0 then return end
     local epoch=host.ModuleEpoch or 0
@@ -34,9 +41,11 @@ local function Start(host,R)
             else reason=core.Requirements(R.Registry.Modules[job.ModuleId].Requires,s.Installed,s.Capabilities) end
             if reason then core.RequestCancel(s,job.JobId,R.Registry)
             else
+                WaitForCapacity(host,R,job)
                 job.State=job.Kind=='Remove' and 'Removing' or 'Building'
                 PublishProgress(host,true)
                 while job.PaidWork<job.Quote.Work and not host.Dead do
+                    WaitForCapacity(host,R,job)
                     local rate=Assist.Rate(host,R.Config)
                     if job.Kind=='Remove' then
                         WaitTicks(1)
@@ -61,13 +70,14 @@ local function Start(host,R)
                         -- Reconcile during resource stalls as well as paid work.
                         local nextRate=Assist.Rate(host,R.Config)
                         PublishProgress(host,false)
-                        if nextRate~=rate then break end
+                        if nextRate~=rate or not R.Core.CanWork(s,job,R.Registry,R.Config) then break end
                     until fulfilled>=1
                     RemoveEconomyEvent(host,host.ModuleEvent);host.ModuleEvent=nil
                     if job.Quote.Work-job.PaidWork<.000001 then job.PaidWork=job.Quote.Work end
                     PublishProgress(host,true)
                     end
                 end
+                WaitForCapacity(host,R,job)
                 local failure=core.Complete(s,job,R.Registry,R.Config)
                 if failure then core.RequestCancel(s,job.JobId,R.Registry);host.ModuleReason=failure.Code end
                 Assist.Stop(host)

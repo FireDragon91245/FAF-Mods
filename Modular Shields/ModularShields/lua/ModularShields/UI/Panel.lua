@@ -54,7 +54,7 @@ end
 local function Create(state,id)
     local frame=GetFrame(0)
     local p=Group(frame,'Modular Shield Dock')
-    p.Depth:Set(100);p.Width:Set(function() return math.min(760,frame.Width()-32) end);p.Height:Set(250)
+    p.Depth:Set(100);p.Width:Set(function() return math.min(760,frame.Width()-32) end);p.Height:Set(330)
     p.Left:Set(function() return (frame.Width()-p.Width())/2 end)
     p.Top:Set(function()
         local native=Controls.Get().constructionGroup
@@ -67,16 +67,22 @@ local function Create(state,id)
     local accents={UEF='ff69b8fa',AEON='ff74e4bb',CYBRAN='fff67b83',SERAPHIM='ffefca78'}
     local accent=accents[state.Faction] or accents.UEF
     local border=Rect(p,0,0,760,250,'ff344958',0)
-    border.Width:Set(p.Width)
-    local bg=Rect(p,1,1,758,248,'f20a141f',1);bg.Width:Set(function() return p.Width()-2 end)
+    border.Width:Set(p.Width);border.Height:Set(p.Height)
+    local bg=Rect(p,1,1,758,248,'f20a141f',1);bg.Width:Set(function() return p.Width()-2 end);bg.Height:Set(function() return p.Height()-2 end)
     local stripe=Rect(p,1,1,758,3,accent,2);stripe.Width:Set(function() return p.Width()-2 end)
-    local divider=Rect(p,14,66,732,1,'ff263c4c',2);divider.Width:Set(function() return p.Width()-28 end)
+    local divider=Rect(p,14,146,732,1,'ff263c4c',2);divider.Width:Set(function() return p.Width()-28 end)
     v.Title=Label(p,16,10,490,14,C.Text)
     v.HP=Label(p,16,35,270,17,C.HP)
     v.Regen=Label(p,296,36,210,15,C.Regen)
     v.Damage=Label(p,518,36,224,15,C.Damage)
-    v.Modules=Label(p,16,83,104,12,C.Muted);Text(v.Modules,'MODULES')
-    v.Slots=Label(p,16,102,108,12,C.Text)
+    v.HPSources={};v.RegenSources={}
+    for n=1,3 do
+        v.HPSources[n]=Label(p,16,63+(n-1)*20,270,12,C.HP)
+        v.RegenSources[n]=Label(p,296,63+(n-1)*20,446,12,C.Regen)
+    end
+    v.Neighbors=Label(p,16,128,728,11,C.Cost)
+    v.Modules=Label(p,16,163,104,12,C.Muted);Text(v.Modules,'MODULES')
+    v.Slots=Label(p,16,182,108,12,C.Text)
     v.Upgrades=Label(p,16,158,108,12,C.Muted);Text(v.Upgrades,'UPGRADES')
     v.Hint=Label(p,16,178,108,10,C.Muted);Text(v.Hint,'Click to fit')
     v.Info=Label(p,16,220,728,11,C.Muted)
@@ -108,7 +114,7 @@ local function Create(state,id)
     local ti=Rect(tip,1,1,394,262,'fc101b29',1);ti.Height:Set(function() return tip.Height()-2 end)
     v.TipParts={tb,ti}
     v.TipLines={}
-    for n=1,16 do v.TipLines[n]=Label(tip,12,12+(n-1)*20,372,n==1 and 16 or 12,C.Text) end
+    for n=1,22 do v.TipLines[n]=Label(tip,12,12+(n-1)*20,372,n==1 and 16 or 12,C.Text) end
     HideTip(v)
     for _,row in ipairs(state.Rows) do
         local card={Controls={}}
@@ -167,33 +173,50 @@ local function Update()
     Text(v.HP,string.format('HP  %.0f / %.0f',live.HP,live.MaxHP),C.HP)
     Text(v.Regen,string.format('+%.0f HP/s  %s',live.Regen,live.Status),C.Regen)
     Text(v.Damage,string.format('-%.0f HP/s  (5s avg)',live.Damage),C.Damage)
-    Text(v.Slots,string.format('%d / %d slots',state.Used,state.Slots),C.Text)
+    Text(v.Slots,string.format('%d / %d slots',state.Used,state.Slots),state.Used>state.Slots and C.Damage or C.Text)
+    local hp={live.BaseHP or state.Stats.BaseHP or state.Stats.ShieldMaxHP,live.ModuleHP or state.Stats.ModuleHP or 0,live.NeighborHP or state.Stats.NeighborHP or 0}
+    local regen={live.BaseRegen or 0,live.ModuleRegen or 0,live.NeighborRegen or 0}
+    local hpLabels={'initial HP','module HP','neighbor storage HP'}
+    local regenLabels={'non-damage vanilla regen','module regen (under fire too)','neighbor power regen'}
+    for n=1,3 do
+        Text(v.HPSources[n],string.format('%+.0f from %s',hp[n],hpLabels[n]),C.HP)
+        Text(v.RegenSources[n],string.format('%+.1f HP/s from %s',regen[n],regenLabels[n]),C.Regen)
+    end
+    local neighbors=state.Neighbors or {}
+    Text(v.Neighbors,string.format('Neighbors: %.0f E/s power | %d energy storage | %d mass storage | Slots: %d base + %d mass | Upkeep x%.2f',neighbors.Production or 0,neighbors.EnergyStorage or 0,neighbors.MassStorage or 0,state.BaseSlots or state.Slots,state.BonusSlots or 0,state.NativeAdjacency or 1),C.Cost)
     Text(v.Pause,state.InstallPaused and '>' or 'II',state.InstallPaused and C.Cost or C.Text)
     Text(v.Repair,'+',state.RepairPaused and C.Muted or C.Regen)
     local barrier=state.Barrier=='Active' and '  |  Barrier active' or (state.Barrier=='WarmingUp' and '  |  Barrier warming up' or '')
-    Text(v.Info,state.LastReason and Model.Reason(state.LastReason) or string.format('Radius %.1f  |  Assisting %d  |  %.1f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier,state.LastReason and C.Damage or C.Muted)
+    Text(v.Info,state.Used>state.Slots and 'Over capacity: excess modules are dormant. Restore mass storage or remove modules.' or (state.LastReason and Model.Reason(state.LastReason) or string.format('Radius %.1f  |  Assisting %d  |  %.1f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier),(state.LastReason or state.Used>state.Slots) and C.Damage or C.Muted)
     local faction=string.lower(state.Faction or 'UEF')
     if faction~='uef' and faction~='aeon' and faction~='cybran' and faction~='seraphim' then faction='uef' end
     local members,available=Model.Lists(state)
+    local memberRows=math.max(1,math.ceil(table.getn(members)/8))
+    local upgradeY=158+memberRows*73
+    v.Panel.Height:Set(upgradeY+99)
+    At(v.Upgrades,v.Panel,16,upgradeY+7)
+    At(v.Hint,v.Panel,16,upgradeY+27)
+    At(v.Info,v.Panel,16,upgradeY+69)
     local visible={}
     local function place(entries,y)
         for index,entry in ipairs(entries) do
             local card=v.Cards[entry.Row.Id]
             card.Data=entry;visible[entry.Row.Id]=true
-            At(card.Root,v.Panel,126+(index-1)*76,y,60,60)
-            local locked=entry.Job or (not entry.Row.Installed and entry.Row.Reason)
+            At(card.Root,v.Panel,126+math.mod(index-1,8)*76,y+math.floor((index-1)/8)*73,60,60)
+            local dormant=state.Stats.Dormant[entry.Row.Id]
+            local locked=entry.Job or dormant or (not entry.Row.Installed and entry.Row.Reason)
             local texture='/mods/ModularShields/textures/modules/'..faction..'_'..entry.Row.Id..(locked and '_dim' or '')..'.dds'
             if card.Texture~=texture then card.Icon:SetTexture(texture);card.Texture=texture end
             local job=entry.Job
             local progress=job and math.min(1,job.PaidWork/job.Quote.Work) or 0
             Text(card.Percentage,job and string.format('%.0f%%',100*progress) or '',C.Text)
-            Text(card.Tag,job and job.Kind=='Remove' and 'REMOVE' or '',C.Damage)
+            Text(card.Tag,job and job.Kind=='Remove' and 'REMOVE' or (dormant and 'DORMANT' or ''),C.Damage)
             Text(card.Badge,job and entry.Index>1 and tostring(entry.Index) or '',C.Cost)
             card.Progress.Width:Set(job and 50*progress or 0)
             card.Progress:SetSolidColor(job and job.Kind=='Remove' and C.Damage or C.Special)
         end
     end
-    place(members,78);place(available,151)
+    place(members,158);place(available,upgradeY)
     for key,card in pairs(v.Cards) do ShowCard(card,visible[key] or false) end
     UpdateTooltip(v)
 end

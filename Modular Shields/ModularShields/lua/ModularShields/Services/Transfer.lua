@@ -21,7 +21,8 @@ local function Restore(host,data)
     host.InstallPaused=data.InstallPaused
     host.RepairPaused=data.RepairPaused
     if data.ShieldToggle~=nil and host.SetScriptBit then host:SetScriptBit('RULEUTC_ShieldToggle',data.ShieldToggle) end
-    assert(R.Core.Used(state,R.Registry)<=R.Config.Chassis[state.Chassis].Slots,'Transfer exceeds chassis slots')
+    -- Paid modules survive losing storage or changing owner. Reconcile computes
+    -- capacity at the new location; excess reservations wait instead of vanishing.
     host:ReconcileModules()
     local s,old=host.MyShield,data.Shield
     if s and old then

@@ -2,30 +2,45 @@ local function Calculate(s, registry, config, neighbors)
     local b = s.Base
     local out = { ShieldMaxHP = b.ShieldMaxHP, ShieldSize = b.ShieldSize, ShieldRegen = b.ShieldRegen,
         RepairBudget = 0, EnergyMultiplier=1, RepairMassMultiplier=1,
+        ModuleSlots=s.Chassis and config.Chassis[s.Chassis].Slots or 0,
         BaseUpkeep = b.Upkeep, ModuleUpkeep = 0, Capabilities = {}, Dormant = {} }
     local function effect(e)
         out[e.Stat] = out[e.Stat] + (e.Op == 'AddBaseFraction' and (b[e.Stat] or 1) * e.Value or e.Value)
     end
-    -- Stable order prevents floating-point differences from hash traversal.
-    for _, id in ipairs(registry.Order) do
-        local instance = s.Installed[id]
+    local function clamp()
+        for stat,cap in pairs(config.Caps) do
+            out[stat]=math.max((config.Floors or {})[stat] or 0,math.min(out[stat],b[stat] and b[stat]*cap or cap))
+        end
+    end
+    -- Storage capacity is known before selecting active equipment. Extra paid
+    -- modules remain installed but dormant until their slots return.
+    for _,e in ipairs(neighbors or {}) do if e.Stat=='ModuleSlots' then effect(e) end end
+    clamp()
+    local active,used={},0
+    for _,id in ipairs(registry.ActivationOrder or registry.Order) do
+        local instance=s.Installed[id]
         if instance then
-            local d = registry.Modules[id]
-            local reason = config.Enabled[d.Behavior] == false and { Code = 'DisabledBehavior' }
-                or nil
-            reason = reason or (d.Operating and s.Rules.Requirements(d.Operating, s.Installed, s.Capabilities))
-            if reason then out.Dormant[id] = reason.Code
+            local d=registry.Modules[id]
+            local reason=config.Enabled[d.Behavior]==false and {Code='DisabledBehavior'} or nil
+            reason=reason or (d.Operating and s.Rules.Requirements(d.Operating,s.Installed,s.Capabilities))
+            local dependency=s.Rules.Requirements(d.Requires,active,s.Capabilities)
+            if dependency then reason=reason or {Code='DependencyInactive'} end
+            if not reason and used+d.Slots>out.ModuleSlots then reason={Code='OverCapacity'} end
+            if reason then out.Dormant[id]=reason.Code
             else
-                for _, e in ipairs(d.Effects) do effect(e) end
-                if d.Behavior then out.Capabilities[d.Behavior] = true end
-                out.ModuleUpkeep = out.ModuleUpkeep + instance.Quote.Upkeep
+                active[id]=true;used=used+d.Slots
+                for _,e in ipairs(d.Effects) do effect(e) end
+                if d.Behavior then out.Capabilities[d.Behavior]=true end
+                out.ModuleUpkeep=out.ModuleUpkeep+instance.Quote.Upkeep
             end
         end
     end
-    for _, e in ipairs(neighbors or {}) do effect(e) end
-    for stat, cap in pairs(config.Caps) do
-        out[stat] = math.max((config.Floors or {})[stat] or 0, math.min(out[stat], b[stat] and b[stat]*cap or cap))
-    end
+    clamp()
+    local moduleHP,moduleRegen=out.ShieldMaxHP-b.ShieldMaxHP,out.ShieldRegen-b.ShieldRegen
+    for _,e in ipairs(neighbors or {}) do if e.Stat~='ModuleSlots' then effect(e) end end
+    clamp()
+    out.BaseHP=b.ShieldMaxHP;out.ModuleHP=moduleHP;out.NeighborHP=out.ShieldMaxHP-b.ShieldMaxHP-moduleHP
+    out.BaseRegen=b.ShieldRegen;out.ModuleRegen=moduleRegen;out.NeighborRegen=out.ShieldRegen-b.ShieldRegen-moduleRegen
     out.PreNeighborUpkeep=out.BaseUpkeep+out.ModuleUpkeep
     out.Upkeep = out.PreNeighborUpkeep*out.EnergyMultiplier
     return out

@@ -70,9 +70,9 @@ AI shield construction/planning is outside the requested scope.
 ## Third pass: legendary and upgrades
 
 1. On T4 fit the three special prerequisites, add true edge-adjacent completed power
-   or energy storage, then install Impenetrable. A nearby object without actual edge
+   then install Impenetrable. T1 power and storage must not qualify. A nearby object without actual edge
    adjacency and another army's provider must not qualify.
-   Check the panel's adjacent-power count with T2/T3 power and energy storage,
+   Check the panel's qualified-power count with T2/T3 power; storage must be excluded,
    including cheat-spawned providers and providers built before/after the shield.
 2. Watch three-second activation warmup. Remove/capture/destroy support, empty power,
    toggle/collapse the shield and restore each condition. Paid legendary remains
@@ -94,3 +94,22 @@ Run a two-client match and replay, rapid repeated callbacks, dense shield overla
 and a projectile-heavy late-game scenario. Record desyncs, unit counts, simulation
 speed, mass/energy totals and visual issues. Then add PJ Smart Shields and weapon
 mods one at a time. Do not claim compatibility or balance before recording results.
+
+## Version 11 balance and source breakdown
+
+- Compare 800 and 2000 E/s neighboring generators: expect +8 and +20 non-combat
+  HP/s. Verify ordinary native upkeep adjacency still applies.
+- Attach energy storage: each adds 10% of chassis base capacity without free healing.
+  Attach mass storage: each adds one slot. Fit beyond the base capacity, remove the
+  storage and restore it. Paid equipment/progress must survive; unfinished jobs
+  wait only when their next installed slot cannot fit. Removals can free capacity.
+- Fire repeatedly at a damaged shield with Regen modules. Only module HP/s should
+  continue through damage delay. Stop firing: vanilla and neighboring power HP/s
+  resume after the normal delay. Verify all six source rows and live total readings.
+- Hover Impenetrable: all three prerequisites, T4 and T2+ generator-only adjacency
+  must be explicit. Test T1, energy storage, corner contact, unfinished and enemy power.
+- Reflect mortars, cluster and heavy artillery from every faction; nuclear shells
+  must still use Atomized, and anti-air flak must retain ordinary behavior.
+- Send light, heavy and experimental ground units into Impenetrable. Verify weighted
+  shield costs, impact visuals, approximately 1.5 seconds of return travel and no
+  repeated damage within the per-unit 15-tick cooldown. Collapse stops denial.
