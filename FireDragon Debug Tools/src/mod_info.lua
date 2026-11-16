@@ -1,0 +1,13 @@
+name = 'FireDragon Debug Tools'
+uid = 'bc9d25b9-d9c5-44d3-bfb1-2277001a669f'
+version = 1
+description = 'Debug panel (Alt-Shift-D) with Infinite Energy and Infinite Mass toggles. Requires cheats or a single-player game.'
+author = 'Rick'
+selectable = true
+enabled = true
+exclusive = false
+ui_only = false
+requires = {}
+conflicts = {}
+before = {}
+after = {}
