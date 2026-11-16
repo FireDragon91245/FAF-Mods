@@ -1,5 +1,6 @@
 local function Tick(host, runtime)
     host.ModuleRepairMass=0
+    if host.Sync then host.Sync.ModularShieldRepairMass=0 end
     local shield, stats = host.MyShield, host.ModuleStats
     if host.RepairPaused or not shield or not shield:IsUp() or stats.RepairBudget <= 0 then return end
     local center, radius = shield:GetPosition(), stats.ShieldSize / 2
@@ -31,6 +32,9 @@ local function Tick(host, runtime)
         end
     end
     host.RepairCursor = math.mod((start + examined), count)
+    -- Direct, exact withdrawals are not native economy events. Attribute their
+    -- actual one-second rate to the selected-unit display without charging twice.
+    if host.Sync then host.Sync.ModularShieldRepairMass=host.ModuleRepairMass end
 end
 Export = { Tick = Tick }
 

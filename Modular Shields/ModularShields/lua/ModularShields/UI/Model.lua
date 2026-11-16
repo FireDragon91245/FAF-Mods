@@ -7,7 +7,7 @@ local Descriptions={
     deflector={'Deflects crashing aircraft and selected','slow projectiles away from the shield.'},
     atomized={'Contains intercepted nuclear explosions.','The shield absorbs the blast damage.'},
     ballistic={'Intercepts hostile missiles and rockets,','including supported shield-bypassing weapons.'},
-    impenetrable={'Blocks hostile ground units and projectiles.','Ground impacts cost shield HP by unit weight.'},
+    impenetrable={'Blocks hostile ground/air units and projectiles.','Unit impacts cost shield HP by unit weight.'},
     regen={'Works continuously, including under fire.','Vanilla and power bonuses wait for no damage.'},
 }
 local Reasons={NoFreeSlot='All module slots are reserved.',WrongChassis='Requires a T4 generator.',

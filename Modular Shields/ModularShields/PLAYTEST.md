@@ -28,7 +28,8 @@ AI shield construction/planning is outside the requested scope.
    Install with zero, one and several guarding engineers. Engineers contributing to
    module work show continuous build beams and remain counted throughout the job;
    their build arms are extended without a disabled icon. Idle guards must not repair
-   the shield or draw construction resources. Measure time and total
+   dome HP; normal chassis repairs and their resource costs remain available.
+   Once the chassis is full, idle guards should draw nothing. Measure time and total
    mass/energy: assistance accelerates spending without changing the quote. Check
    distant, busy, already paused, reassigned and manually paused engineers.
    Check that guarding engineers retain their orders after each completion.
@@ -122,3 +123,23 @@ mods one at a time. Do not claim compatibility or balance before recording resul
 - Both storage types should show vanilla faction adjacency links. Verify all four
   factions, storage completion, removal/capture, host destruction and upgrading.
   Existing native links should be reused; repeated updates must not duplicate them.
+
+## Version 13 idle repairs, aircraft and live readouts
+
+- Guard and repair a damaged modular generator with engineers, ACUs and drones.
+  With no module job, builders must repair chassis HP with normal resource costs,
+  but never add shield HP. Once the chassis is full they should spend nothing.
+  Start, finish, cancel and pause jobs; dome repair must never return between jobs.
+  Module assistance must still animate and share the generator's paid progress.
+- Attack an active Impenetrable dome with low bombers, transports and fast aircraft.
+  They must stay outside, retain altitude/orders and charge weighted shield damage
+  at most once per unit/host per 15 ticks. Above-dome overflight and friendly access
+  remain possible. Verify denial stops on shield collapse or loss of support.
+- Damage a friendly structure inside a Repair aura. Its actual mass spend must show
+  in the generator's native bottom-right panel and stop when repairs stop/pause.
+- Keep the dock open while adjacent energy/mass storage finishes construction.
+  Capacity, slots, source rows, native shield label and support links must refresh
+  promptly after completion, without reselection.
+- Damage the shield and keep firing, then stop and wait for its native regeneration
+  delay. Vanilla/neighbor rows show zero during the delay and while full/offline;
+  both become positive while healing after the delay. Module regen works under fire.

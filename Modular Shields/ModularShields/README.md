@@ -75,8 +75,9 @@ Engineers assigned to guard/repair the host, in normal build range, contribute t
 build rates. The host pays for their work through its economy event. Engineers
 extend their build arms and show continuous beams during module installation;
 they are not paused and do not display a disabled icon. The panel reports their
-count and combined rate. Idle or paused installations leave guards waiting, with
-no native shield repair, beams or construction resource draw. Normal shield
+count and combined rate. Outside active module jobs, guards retain normal chassis
+HP repair, its animations and native resource costs. Dome HP is never exposed as
+native builder repair work. Normal shield
 regeneration and generator upkeep continue. Unassigned, distant, busy, player-paused
 and other-army engineers do not contribute. Reassigning restores normal construction
 and the latest buffed build rate. Guard orders remain intact between module jobs;
@@ -103,6 +104,10 @@ structures inside the dome. It excludes the generator and zero-mass targets.
 Mass cost is `restored HP * 0.75 * target mass cost / target max HP`, modified by
 configured neighbor efficiency. Actual mass is withdrawn before healing, without
 yielding between payment and delivery. Empty storage delivers no free repair.
+Actual aura mass spending also appears in the native selected-unit resource panel;
+this is display attribution of the original withdrawal, without a second charge.
+Newly completed adjacent power/storage providers trigger a shield refresh on the
+next simulation tick, including the live capacity label in the native unit view.
 
 ## Protection behavior
 
@@ -142,7 +147,7 @@ weapons and ordinary shields retain their normal behavior.
 same-army edge-adjacent T2-or-higher power generator. Energy storage and T1
 generators do not satisfy this requirement. The paid module remains installed
 and dormant when support is lost. While powered with an operational dome, it warms
-up for three seconds, then enables broad projectile interception and ground denial.
+up for three seconds, then enables broad projectile interception and ground/air denial.
 Support loss, power loss, shield collapse and destruction deactivate the barrier.
 Restoration requires a fresh warmup.
 
@@ -174,7 +179,10 @@ position, or chooses a pathable, unoccupied exterior point. It runs every simula
 tick, accounts for unit size, checks observed swept crossings, and avoids placing a
 unit inside another active hostile barrier. Units inside on activation/radius change
 can leave; after leaving they cannot re-enter. Newly observed enemy teleport/unload
-arrivals inside are ejected. Friends retain access. Naval/air movement is unaffected.
+arrivals inside are ejected. Friends retain access. Naval movement is unaffected.
+Low aircraft are blocked by the actual spherical dome, with swept crossings and
+speed-scaled outward displacement at their current flight altitude. Aircraft above
+the dome can fly over it. Ground and air impacts use the same weighted cost/cooldown.
 Each successful enemy push charges shield HP proportional to physical mass, or
 blueprint mass cost when no physical mass is defined: max(5, mass * 0.05). The shield
 impact effect plays. Outward displacement targets about 1.5 seconds of walking
@@ -234,7 +242,7 @@ From the workspace root run `./tests/run.ps1` (PowerShell, Lua and luac on PATH)
 This runs pure rules, adapter/economy, blueprint and gameplay/lifecycle checks, then
 parses every Lua/blueprint source. The engine mocks cover once-only interceptions,
 paid work and starvation, assistant release, body bounce/breakup, deferred cargo,
-upgrade transfer, ground behavior, neighbor rules and legendary activation.
+upgrade transfer, ground/air behavior, neighbor rules and legendary activation.
 UI checks also exercise image layout, persistent controls and the secured
 simulation callback for fitting, removal, cancellation and pausing, including FAF's
 recursive unit-data merge and cleanup of completed/cancelled queue controls.

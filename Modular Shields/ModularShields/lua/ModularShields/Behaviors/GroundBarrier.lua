@@ -1,8 +1,14 @@
 local G=import('/mods/ModularShields/lua/ModularShields/Core/Geometry.lua').Export
 local Impact=import('/mods/ModularShields/lua/ModularShields/Adapters/Impact.lua').Export
 local function Radius(u) return math.max(u.Blueprint.SizeX or 1,u.Blueprint.SizeZ or 1)/2 end
+local function Air(u) return u:GetCurrentLayer()=='Air' end
+local function DistanceSquared(a,b,air)
+    local dx,dz=a[1]-b[1],a[3]-b[3]
+    local dy=air and a[2]-b[2] or 0
+    return dx*dx+dy*dy+dz*dz
+end
 local function Safe(u,p)
-    if not u:CanPathTo(p) then return false end
+    if not Air(u) and not u:CanPathTo(p) then return false end
     if not import('/mods/ModularShields/lua/ModularShields/Services/Combat.lua').Export.GroundExterior(u,p) then return false end
     local r=Radius(u)
     local size=ScenarioInfo.size
@@ -11,7 +17,7 @@ local function Safe(u,p)
         for _,other in ipairs(GetUnitsInRect(p[1]-r,p[3]-r,p[1]+r,p[3]+r) or {}) do
             if other~=u and not other.Dead and not IsDestroyed(other) and other:GetCurrentLayer()==u:GetCurrentLayer() then
                 local q=other:GetPosition();local rr=r+Radius(other)
-                if (q[1]-p[1])*(q[1]-p[1])+(q[3]-p[3])*(q[3]-p[3])<rr*rr then return false end
+                if DistanceSquared(q,p,Air(u))<rr*rr then return false end
             end
         end
     end
@@ -19,12 +25,19 @@ local function Safe(u,p)
 end
 local function Push(u,record,center,radius,config)
     local p=u:GetPosition()
-    local speed=(u.Blueprint.Physics or {}).MaxSpeed or 2
+    local air=Air(u)
+    local speed=air and (u.Blueprint.Air or {}).MaxAirspeed or (u.Blueprint.Physics or {}).MaxSpeed
+    speed=speed or 2
     local distance=math.max(config.MinimumPush,speed*config.ReturnSeconds)
-    local minimum=radius+Radius(u)+config.Clearance+distance
+    local edge=radius+Radius(u)
+    -- Fly out along the dome's cross-section at the current altitude. Warping
+    -- aircraft to terrain height would turn a force-field hit into a crash.
+    if air then local dy=p[2]-center[2];edge=math.sqrt(math.max(0,edge*edge-dy*dy)) end
+    local minimum=edge+config.Clearance+distance
     if record.Outside then
         local q=record.Outside
-        if (q[1]-center[1])*(q[1]-center[1])+(q[3]-center[3])*(q[3]-center[3])>=minimum*minimum and Safe(u,q) then
+        if (not air or math.abs(q[2]-p[2])<.1)
+            and (q[1]-center[1])*(q[1]-center[1])+(q[3]-center[3])*(q[3]-center[3])>=minimum*minimum and Safe(u,q) then
             Warp(u,q);return true
         end
     end
@@ -38,7 +51,7 @@ local function Push(u,record,center,radius,config)
             local a=angle+offset
             local rr=minimum+extra
             local x,z=center[1]+math.cos(a)*rr,center[3]+math.sin(a)*rr
-            local q={x,math.max(GetTerrainHeight(x,z),GetSurfaceHeight(x,z)),z}
+            local q={x,air and p[2] or math.max(GetTerrainHeight(x,z),GetSurfaceHeight(x,z)),z}
             if Safe(u,q) then Warp(u,q);record.Outside=G.Copy(q);return true end
         end
     end
@@ -61,22 +74,22 @@ local function Tick(host,config)
     host.BarrierRecords=host.BarrierRecords or {}
     local center=host.MyShield:GetPosition()
     local radius=host.MyShield.Size/2
-    local units=host:GetAIBrain():GetUnitsAroundPoint(categories.LAND*categories.MOBILE,center,radius+config.ScanMargin,'Enemy') or {}
+    local units=host:GetAIBrain():GetUnitsAroundPoint((categories.LAND+categories.AIR)*categories.MOBILE,center,radius+config.ScanMargin,'Enemy') or {}
     table.sort(units,function(a,b) return a.EntityId<b.EntityId end)
     local seen={}
     for _,u in ipairs(units) do
         if not u.Dead and not IsDestroyed(u) and IsEnemy(host.Army,u.Army)
-            and (u:GetCurrentLayer()=='Land' or u:GetCurrentLayer()=='Seabed') and not u:IsUnitState('Attached') then
+            and (u:GetCurrentLayer()=='Land' or u:GetCurrentLayer()=='Seabed' or Air(u)) and not u:IsUnitState('Attached') then
             local id,p=u.EntityId,u:GetPosition()
             seen[id]=true
             local record=host.BarrierRecords[id]
-            local inside=(p[1]-center[1])*(p[1]-center[1])+(p[3]-center[3])*(p[3]-center[3])<(radius+Radius(u))*(radius+Radius(u))
+            local inside=DistanceSquared(p,center,Air(u))<(radius+Radius(u))*(radius+Radius(u))
             if not record then
                 record={InsideAllowed=initial and inside,Position=G.Copy(p)}
                 host.BarrierRecords[id]=record
             end
             if not inside then record.InsideAllowed=false end
-            local crossed=not record.InsideAllowed and G.Entry(record.Position,p,center,radius+Radius(u),true)
+            local crossed=not record.InsideAllowed and G.Entry(record.Position,p,center,radius+Radius(u),not Air(u))
             if (inside and not record.InsideAllowed) or crossed then
                 if Push(u,record,center,radius,config) then
                     Charge(host,u,p,center,config)

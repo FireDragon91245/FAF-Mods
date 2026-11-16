@@ -1,6 +1,11 @@
 local library = import('/lua/shield.lua')
 local function Apply(host, stats)
     local s = host.MyShield
+    -- Stock CreateShield makes the dome the generator's native build focus.
+    -- That exposes shield HP as repair work (and its progress bar) to guards.
+    -- Module work has its own economy/progress; only a chassis upgrade needs a
+    -- native focus. Removing the dome focus also closes automatic repair paths.
+    if not host.ModuleUpgrading and host.ClearFocusEntity then host:ClearFocusEntity() end
     if s and not IsDestroyed(s) then
         local health = s:GetHealth()
         s:SetMaxHealth(stats.ShieldMaxHP)

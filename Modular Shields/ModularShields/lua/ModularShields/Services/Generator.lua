@@ -12,6 +12,12 @@ local Ground = import(root .. 'Behaviors/GroundBarrier.lua').Export
 local Telemetry = import(root .. 'Services/Telemetry.lua').Export
 local function MakeGenerator(Base)
     return ClassUnit(Base) {
+        CreateShield=function(self,spec)
+            Base.CreateShield(self,spec)
+            -- Leave the chassis repairable, but never expose the dome as native
+            -- guard/repair work. Its HP is maintained by shield regeneration.
+            if not self.ModuleUpgrading then self:ClearFocusEntity() end
+        end,
         OnStopBeingBuilt = function(self, builder, layer)
             local inherited=builder and builder.Loadout and builder.ModuleUpgrading and Transfer.Snapshot(builder,true)
             Base.OnStopBeingBuilt(self,builder,layer)
@@ -186,7 +192,10 @@ local function MakeGenerator(Base)
                 self.InstallPaused = not self.InstallPaused
                 if self.InstallPaused then Jobs.Stop(self) end
                 if self.Loadout.Queue[1] then self.Loadout.Queue[1].State = self.InstallPaused and 'Paused' or 'Queued' end
-            elseif action == 'repair' then self.RepairPaused = not self.RepairPaused end
+            elseif action == 'repair' then
+                self.RepairPaused = not self.RepairPaused
+                if self.RepairPaused then self.ModuleRepairMass=0;self.Sync.ModularShieldRepairMass=0 end
+            end
             self.ModuleReason = reason and (reason.Code..(reason.Module and ': '..reason.Module or ''))
             self:ReconcileModules(); Jobs.Start(self,R)
             return reason

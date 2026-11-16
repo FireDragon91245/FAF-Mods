@@ -70,5 +70,24 @@ local function Snapshot(host,registry,config,excluded)
     return facts
 end
 
-Export={Snapshot=Snapshot,EdgeAdjacent=EdgeAdjacent,Tags=Tags}
+local function NotifyCompletion(unit,config)
+    if unit.Dead or IsDestroyed(unit) or unit:GetFractionComplete()~=1 then return end
+    local bounds=Skirt(unit)
+    if not bounds then return end
+    local margin=config.NeighborScanMargin or 16
+    local candidates={}
+    for id,host in pairs(unit.AdjacentUnits or {}) do candidates[id]=host end
+    for _,host in ipairs(GetUnitsInRect(bounds[1]-margin,bounds[2]-margin,bounds[3]+margin,bounds[4]+margin) or {}) do
+        if host.EntityId then candidates[host.EntityId]=host end
+    end
+    local ids={};for id in pairs(candidates) do table.insert(ids,id) end;table.sort(ids)
+    for _,id in ipairs(ids) do
+        local host=candidates[id]
+        if host~=unit and not host.Dead and not IsDestroyed(host) and host.Army==unit.Army and host.Loadout and host.ReconcileModules then
+            local skirt=Skirt(host)
+            if skirt and EdgeAdjacent(bounds,skirt,config.NeighborEdgeTolerance or .05) then host:ReconcileModules() end
+        end
+    end
+end
+Export={Snapshot=Snapshot,EdgeAdjacent=EdgeAdjacent,Tags=Tags,NotifyCompletion=NotifyCompletion}
 return Export

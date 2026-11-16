@@ -170,7 +170,8 @@ Export={Operational=Operational,Classify=Classify,Damage=Damage,Resolve=Resolve,
             if host.BarrierActive and Operational(host) and IsEnemy(host.Army,u.Army) then
                 local c=host.MyShield:GetPosition()
                 local r=host.MyShield.Size/2+math.max(u.Blueprint.SizeX or 1,u.Blueprint.SizeZ or 1)/2
-                if (p[1]-c[1])*(p[1]-c[1])+(p[3]-c[3])*(p[3]-c[3])<r*r then return false end
+                local dy=u:GetCurrentLayer()=='Air' and p[2]-c[2] or 0
+                if (p[1]-c[1])*(p[1]-c[1])+dy*dy+(p[3]-c[3])*(p[3]-c[3])<r*r then return false end
             end
         end
         return true

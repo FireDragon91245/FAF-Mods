@@ -1,4 +1,5 @@
--- The host pays for module work. Guarding engineers never run native repair in parallel.
+-- The host pays for module work. Outside module jobs, native chassis repair is
+-- untouched; the generator removes only its dome's native repair focus.
 local function Alive(u) return u and not u.Dead and not IsDestroyed(u) end
 local function Assigned(u,host)
     -- The active order remains authoritative, including when focus is the dome.
@@ -7,7 +8,7 @@ local function Assigned(u,host)
     if not command then return false end
     if type(command)=='table' and command.commandType then
         local kind=command.commandType
-        if kind~=9 and kind~=15 and kind~=20 then return false end -- assist, guard, repair
+        if kind~=9 and kind~=15 and kind~=20 then return false end
         local target=command.target
         local id=command.targetId
         local shield=host.MyShield
@@ -45,8 +46,6 @@ local function StopEffects(u)
     for _,beam in ipairs(u.ModularAssistBeams or {}) do beam:Destroy() end
     u.ModularAssistBeams=nil
     if Alive(u) then
-        -- Native repair orders can refresh their own progress even at zero work
-        -- rate. Keep idle guards clear instead of showing shield repair progress.
         u:SetWorkProgress(0)
         if u.BuildingOpenAnimManip then u.BuildingOpenAnimManip:SetRate(-(u.Blueprint.Display.AnimationBuildRate or 1)) end
         if u.BuildManipulatorSetEnabled then u:BuildManipulatorSetEnabled(false) end
@@ -72,7 +71,7 @@ local function Claim(u,host)
     host.ModuleAssistants[u.EntityId]=u
     -- Keep buffs effective while holding the native engine at zero build rate.
     u.SetBuildRate=function(unit,rate) native.Rate=rate;native.Set(unit,0) end
-    -- Native guard/repair callbacks must not create idle repair beams or retract
+    -- Native guard/repair callbacks must not create extra repair beams or retract
     -- the arm while the scripted module job is using it.
     if u.StopBuildingEffects then u:StopBuildingEffects(u:GetFocusUnit()) end
     u.StartBuildingEffects=function() end
@@ -100,13 +99,17 @@ local function Release(host,id)
         u.OnPrepareArmToBuild=native.OwnPrepare;u.OnStopBuilderTracking=native.OwnTracking
         u.StartBuildingEffects=native.OwnEffects
         u.ModularNativeWork=nil;u.ModularAssistOwner=nil
-        if Alive(u) then native.Set(u,native.Rate);u:UpdateConsumptionValues() end
+        if Alive(u) then
+            native.Set(u,native.Rate);u:UpdateConsumptionValues()
+            -- A module can finish while a guard still has chassis damage to
+            -- repair. Restore its native animation/effects along with its rate.
+            if host.GetHealth and host:GetHealth()<host:GetMaxHealth() and u:GetFocusUnit()==host and not u:IsPaused() then
+                if u.OnPrepareArmToBuild then u:OnPrepareArmToBuild() end
+                if u.StartBuildingEffects then u:StartBuildingEffects(host,'Repair') end
+            end
+        end
     end
     host.ModuleAssistants[id]=nil
-end
-local function Stop(host)
-    for _,u in pairs(host.ModuleAssistants or {}) do StopEffects(u) end
-    host.ModuleAssistantCount=0;host.ModuleWorkRate=nil
 end
 local function ReleaseAll(host)
     host.ModuleAssistants=host.ModuleAssistants or {}
@@ -119,6 +122,7 @@ local function Rate(host,config)
     if host.ModuleUpgrading then ReleaseAll(host);return config.InstallRate end
     local job=host.Loadout and host.Loadout.Queue[1]
     local working=job and job.State~='WaitingForSlots' and not host.InstallPaused
+    if not working then ReleaseAll(host);return config.InstallRate end
     local candidates={}
     for _,u in ipairs(host:GetGuards() or {}) do candidates[u.EntityId]=u end
     for id,u in pairs(host.Repairers or {}) do candidates[id]=u end
@@ -130,7 +134,8 @@ local function Rate(host,config)
         local u=candidates[id]
         local owned=u.ModularAssistOwner==host
         local valid=Alive(u) and u.Army==host.Army and u:GetFractionComplete()==1
-            and u.Blueprint.CategoriesHash.ENGINEER and Assigned(u,host) and InRange(u,host)
+            and u.Blueprint.CategoriesHash.ENGINEER
+            and Assigned(u,host) and InRange(u,host)
             and (not u.ModularAssistOwner or owned)
         if valid then
             if not owned then Claim(u,host) end
@@ -140,7 +145,7 @@ local function Rate(host,config)
                 end
                 rate=rate+u.ModularNativeWork.Rate;count=count+1
                 table.insert(assistants,id)
-            else StopEffects(u) end
+            else Release(host,id) end
         elseif owned then Release(host,id) end
     end
     host.ModuleAssistantCount=count
@@ -150,5 +155,5 @@ local function Rate(host,config)
     if working then UpdateProgress(host,math.min(1,job.PaidWork/job.Quote.Work)) end
     return host.ModuleWorkRate
 end
-Export={Rate=Rate,Stop=Stop,ReleaseAll=ReleaseAll,UpdateProgress=UpdateProgress}
+Export={Rate=Rate,Stop=ReleaseAll,ReleaseAll=ReleaseAll,UpdateProgress=UpdateProgress}
 return Export
