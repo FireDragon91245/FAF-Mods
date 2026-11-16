@@ -1,9 +1,17 @@
 -- Insta Build Render My Units!: track root-bone visibility and repair units left
--- invisible by an interrupted construction hide. Logic lives in RenderGuard.lua.
+-- invisible by an interrupted construction hide (RenderGuard.lua), and restore
+-- structures upgraded in the tick they were started (UpgradeFix.lua).
 local RenderGuard = import('/mods/InstaBuildRenderFix/lua/InstaBuildRenderFix/RenderGuard.lua')
+local InstaFixUpgradeFix = import('/mods/InstaBuildRenderFix/lua/InstaBuildRenderFix/UpgradeFix.lua')
 local RenderGuardPreviousUnit = Unit
 
 Unit = ClassUnit(RenderGuardPreviousUnit) {
+    OnStartBuild = function(self, built, order)
+        local result = RenderGuardPreviousUnit.OnStartBuild(self, built, order)
+        InstaFixUpgradeFix.AfterStartBuild(built, order)
+        return result
+    end,
+
     HideBone = function(self, bone, affectChildren)
         if bone == 0 then RenderGuard.OnRootHidden(self, GetGameTick()) end
         return RenderGuardPreviousUnit.HideBone(self, bone, affectChildren)

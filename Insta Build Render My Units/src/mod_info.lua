@@ -1,6 +1,6 @@
 name = 'Insta Build Render My Units!'
 uid = '8d221815-6c68-441e-be0d-55c66a6fc37a'
-version = 1
+version = 3
 description = 'Fixes units, factories and upgrades that stay invisible when they are completed instantly (ai_InstaBuild or very fast builds).'
 author = 'Rick'
 selectable = true

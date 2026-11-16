@@ -104,19 +104,31 @@ check(not Guard.ShouldWatch(newUnit(sim, { COMMAND = true }), {}), 'Commanders (
 check(not Guard.ShouldWatch(newUnit(sim, { EXTERNALFACTORYUNIT = true }), {}), 'External factories (always hidden) are not watched')
 
 -- Hook wiring: the class wrapper forwards to the engine methods and feeds the guard.
-local engine = { hides = {}, shows = {}, storage = {} }
+local engine = { hides = {}, shows = {}, storage = {}, starts = {} }
 local BaseUnit = {
     HideBone = function(self, bone, children) table.insert(engine.hides, bone) end,
     ShowBone = function(self, bone, children) table.insert(engine.shows, bone) end,
     OnStorageChange = function(self, loading) table.insert(engine.storage, loading) end,
     OnStopBeingBuilt = function(self) return 'base' end,
+    OnStartBuild = function(self, built, order)
+        table.insert(engine.starts, order)
+        if order == 'Upgrade' then
+            built.DisallowCollisions, built.CanTakeDamage, built.IsUpgrade, built.shape = true, false, true, 'None'
+        end
+        return true
+    end,
     ForkThread = function(self, fn, ...) engine.fork = { fn = fn, args = { ... } } end,
+}
+local Upgrade = loadModule('src/lua/InstaBuildRenderFix/UpgradeFix.lua')
+local modules = {
+    ['/mods/InstaBuildRenderFix/lua/InstaBuildRenderFix/RenderGuard.lua'] = Guard,
+    ['/mods/InstaBuildRenderFix/lua/InstaBuildRenderFix/UpgradeFix.lua'] = Upgrade,
 }
 local tick = 7
 local hookEnv = loadModule('src/hook/lua/sim/Unit.lua', {
     Unit = BaseUnit,
     ClassUnit = function(base) return function(spec) return setmetatable(spec, { __index = base }) end end,
-    import = function(path) assert(path == '/mods/InstaBuildRenderFix/lua/InstaBuildRenderFix/RenderGuard.lua', path); return Guard end,
+    import = function(path) return assert(modules[path], path) end,
     GetGameTick = function() return tick end,
     WaitTicks = 'WaitTicks', IsDestroyed = 'IsDestroyed',
 })
@@ -136,5 +148,146 @@ check(u.RenderGuardInStorage == nil, 'Storage unloading clears the flag')
 check(u:OnStopBeingBuilt(nil, 'Land') == 'base' and engine.fork == nil, 'No watch without a builder')
 check(u:OnStopBeingBuilt({}, 'Land') == 'base' and engine.fork.fn == Guard.Watch, 'Completed builds fork the watch')
 check(engine.fork.args[1] == 'WaitTicks' and engine.fork.args[2] == hookEnv.GetGameTick and engine.fork.args[3] == 'IsDestroyed', 'Watch receives the sim primitives')
+
+-- Upgrades: vanilla OnStartBuild makes the upgrade uncollidable and invulnerable; its
+-- OnStopBeingBuilt reverts that. With ai_InstaBuild the upgrade already finished.
+local function newUpgrade(finished, sphere)
+    local built = { isFinishedUnit = finished, Blueprint = { SizeSphere = sphere } }
+    function built:RevertCollisionShape() self.shape = 'Blueprint' end
+    function built:SetCollisionShape(shape, x, y, z, size) self.shape = shape .. size end
+    return built
+end
+local insta = newUpgrade(true)
+check(u:OnStartBuild(insta, 'Upgrade') == true and engine.starts[1] == 'Upgrade', 'OnStartBuild forwards to vanilla')
+check(insta.shape == 'Blueprint' and insta.CanTakeDamage == true and insta.DisallowCollisions == false and insta.IsUpgrade == nil,
+    'Finished insta upgrade gets collision and damage back')
+local sphere = newUpgrade(true, 3)
+u:OnStartBuild(sphere, 'Upgrade')
+check(sphere.shape == 'Sphere3', 'Sphere collision from the blueprint is re-applied')
+local normal = newUpgrade(nil)
+u:OnStartBuild(normal, 'Upgrade')
+check(normal.shape == 'None' and normal.CanTakeDamage == false and normal.IsUpgrade == true, 'Upgrades still being built are left to vanilla')
+check(not Upgrade.NeedsRestore(newUpgrade(true), 'FactoryBuild'), 'Non-upgrade orders are ignored')
+local dead = newUpgrade(true); dead.IsUpgrade = true; dead.Dead = true
+check(not Upgrade.NeedsRestore(dead, 'Upgrade'), 'Dead upgrades are ignored')
+
+-- Factory roll-off: vanilla FactoryUnit flow driven through the FactoryUnit hook.
+local Fix = loadModule('src/lua/InstaBuildRenderFix/FactoryFix.lua')
+local function isDestroyed(entity) return entity.destroyed == true end
+
+local log
+local VanillaFactory = {
+    CalculateRollOffPoint = function(self) return 90, 1, 2, 3 end,
+    OnStopBuild = function(self, unit, order)
+        table.insert(log, 'stop')
+        if not self.FactoryBuildFailed and order ~= 'Upgrade' then
+            unit.moveOrders = unit.attached and 1 or 0
+            table.insert(log, 'move')
+        end
+        return 'vanilla'
+    end,
+    FinishBuildThread = function(self, unit, order)
+        unit.attached = false
+        table.insert(log, 'detach')
+    end,
+}
+VanillaFactory.BuildingState = {
+    Main = function(self)
+        local unit = self.UnitBeingBuilt
+        unit:HideBone(0, true)
+        self.BuildBoneRotator:SetGoal(90)
+        unit:AttachBoneTo(-2, self, 0)
+        table.insert(log, 'main')
+        coroutine.yield()
+        unit:ShowBone(0, true)
+    end,
+}
+-- Forks the hooked Main like ChangeState and runs it up to its WaitTicks.
+local function startMain(factory)
+    local thread = coroutine.create(HookedFactoryMain)
+    assert(coroutine.resume(thread, factory))
+    return thread
+end
+local factoryHook = loadModule('src/hook/lua/sim/units/FactoryUnit.lua', {
+    FactoryUnit = VanillaFactory,
+    ClassUnit = function(base) return function(spec) return setmetatable(spec, { __index = base }) end end,
+    State = function(base) return function(spec) return setmetatable(spec, { __index = base }) end end,
+    import = function(path) assert(path == '/mods/InstaBuildRenderFix/lua/InstaBuildRenderFix/FactoryFix.lua', path); return Fix end,
+    IsDestroyed = isDestroyed,
+    WaitTicks = function(ticks) table.insert(log, 'wait' .. ticks) end,
+})
+local HookedFactory = factoryHook.FactoryUnit
+HookedFactoryMain = HookedFactory.BuildingState.Main
+check(HookedFactory ~= VanillaFactory and HookedFactory.BuildingState ~= VanillaFactory.BuildingState, 'Hook replaces FactoryUnit and its BuildingState')
+
+local function newFactory()
+    local factory = setmetatable({
+        Blueprint = { Display = { BuildAttachBone = 'Attachpoint' } },
+        RollOffPoint = { 0, 0, 0 },
+        BuildBoneRotator = { SetGoal = function(self, goal) self.goal = goal end },
+        SetBusy = function(self, busy) self.busy = busy end,
+        SetBlockCommandQueue = function(self, block) self.blocked = block end,
+    }, { __index = HookedFactory })
+    local unit = { fraction = 1, hidden = false }
+    function unit:GetFractionComplete() return self.fraction end
+    function unit:HideBone() self.hidden = true; self.RenderGuardHiddenSince = 1; table.insert(log, 'hide') end
+    function unit:ShowBone() self.hidden = false; self.RenderGuardHiddenSince = nil; table.insert(log, 'show') end
+    function unit:AttachBoneTo(bone, parent, parentBone)
+        self.attached = true; self.attachBone = parentBone; table.insert(log, 'attach')
+    end
+    factory.UnitBeingBuilt = unit
+    return factory, unit
+end
+
+-- ai_InstaBuild: OnStopBuild runs before the forked BuildingState.Main.
+log = {}
+local factory, built = newFactory()
+check(factory:OnStopBuild(built, 'FactoryBuild') == 'vanilla', 'OnStopBuild forwards to vanilla')
+check(table.concat(log, ',') == 'attach,stop,move', 'Instant build is attached before the move-off order')
+check(built.moveOrders == 1 and built.attachBone == 'Attachpoint', 'Move-off order is issued to the attached unit')
+check(factory.BuildBoneRotator.goal == 90 and factory.RollOffPoint[3] == 3, 'Roll-off point and rotator are set like vanilla Main')
+HookedFactory.BuildingState.Main(factory)
+check(table.concat(log, ',') == 'attach,stop,move' and not built.hidden, 'Late BuildingState.Main is skipped')
+factory:FinishBuildThread(built, 'FactoryBuild')
+check(table.concat(log, ',', 4) == 'wait3,detach' and factory.busy and factory.blocked,
+    'Unit stays attached for 3 ticks on a busy factory before the vanilla detach')
+check(not built.attached and not built.hidden, 'Unit is detached visible without an extra show')
+
+-- Normal build: Main ran ticks earlier, OnStopBuild is left alone.
+log = {}
+factory, built = newFactory()
+assert(coroutine.resume(startMain(factory)))
+factory:OnStopBuild(built, 'FactoryBuild')
+check(table.concat(log, ',') == 'hide,attach,main,show,stop,move', 'Normal builds keep the vanilla flow')
+factory:FinishBuildThread(built, 'FactoryBuild')
+check(log[7] == 'detach' and log[8] == nil, 'Normal builds are detached without a hold or an extra show')
+
+-- Fast build: Main hid the unit and was destroyed by ChangeState before its ShowBone.
+log = {}
+factory, built = newFactory()
+startMain(factory)
+factory:OnStopBuild(built, 'FactoryBuild')
+factory:FinishBuildThread(built, 'FactoryBuild')
+check(table.concat(log, ',') == 'hide,attach,main,stop,move,detach,show' and not built.hidden, 'Cut-off Main hide is undone after FinishBuildThread')
+
+-- Cases where OnStopBuild must not attach.
+local function attachedBy(setup, order)
+    log = {}
+    local f, u = newFactory()
+    setup(f, u)
+    f:OnStopBuild(u, order or 'FactoryBuild')
+    return u.attached == true
+end
+check(not attachedBy(function() end, 'Upgrade'), 'Upgrades are not attached')
+check(not attachedBy(function(f) f.FactoryBuildFailed = true end), 'Failed builds are not attached')
+check(not attachedBy(function(_, u) u.fraction = 0.5 end), 'Incomplete units are not attached')
+check(not attachedBy(function(_, u) u.destroyed = true end), 'Destroyed units are not attached')
+check(not attachedBy(function(f) f.Dead = true end), 'Dead factories do not attach')
+check(not attachedBy(function(f) f.BuildBoneRotator = nil end), 'Factories without a build rotator are left alone')
+log = {}
+factory, built = newFactory()
+built.destroyed = true
+factory.UnitBeingBuilt = built
+check(not Fix.AfterFinishBuild(built, isDestroyed), 'Destroyed units are not shown')
 
 print(string.format('PASS: %d render guard checks', count))
