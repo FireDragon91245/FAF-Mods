@@ -45,7 +45,9 @@ local function StopEffects(u)
     for _,beam in ipairs(u.ModularAssistBeams or {}) do beam:Destroy() end
     u.ModularAssistBeams=nil
     if Alive(u) then
-        if u.ModularAssistProgress then u:SetWorkProgress(0) end
+        -- Native repair orders can refresh their own progress even at zero work
+        -- rate. Keep idle guards clear instead of showing shield repair progress.
+        u:SetWorkProgress(0)
         if u.BuildingOpenAnimManip then u.BuildingOpenAnimManip:SetRate(-(u.Blueprint.Display.AnimationBuildRate or 1)) end
         if u.BuildManipulatorSetEnabled then u:BuildManipulatorSetEnabled(false) end
     end

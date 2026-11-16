@@ -29,13 +29,20 @@ local function Start(host,R)
         while not host.Dead and table.getn(host.Loadout.Queue)>0 and not host.InstallPaused and not host.ModuleUpgrading do
             local s,core=host.Loadout,R.Core
             local job=s.Queue[1]
-            local reason=core.Requirements(R.Registry.Modules[job.ModuleId].Requires,s.Installed,s.Capabilities)
+            local reason
+            if job.Kind=='Remove' then reason=core.CanRemove(s,job.ModuleId,R.Registry)
+            else reason=core.Requirements(R.Registry.Modules[job.ModuleId].Requires,s.Installed,s.Capabilities) end
             if reason then core.RequestCancel(s,job.JobId,R.Registry)
             else
-                job.State='Building'
+                job.State=job.Kind=='Remove' and 'Removing' or 'Building'
                 PublishProgress(host,true)
                 while job.PaidWork<job.Quote.Work and not host.Dead do
                     local rate=Assist.Rate(host,R.Config)
+                    if job.Kind=='Remove' then
+                        WaitTicks(1)
+                        job.PaidWork=math.min(job.Quote.Work,job.PaidWork+rate/10)
+                        PublishProgress(host,false)
+                    else
                     local before=job.PaidWork
                     local work=math.min(rate*R.Config.InstallSliceSeconds,job.Quote.Work-before)
                     local fraction=work/job.Quote.Work
@@ -59,6 +66,7 @@ local function Start(host,R)
                     RemoveEconomyEvent(host,host.ModuleEvent);host.ModuleEvent=nil
                     if job.Quote.Work-job.PaidWork<.000001 then job.PaidWork=job.Quote.Work end
                     PublishProgress(host,true)
+                    end
                 end
                 local failure=core.Complete(s,job,R.Registry,R.Config)
                 if failure then core.RequestCancel(s,job.JobId,R.Registry);host.ModuleReason=failure.Code end

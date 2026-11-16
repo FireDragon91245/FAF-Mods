@@ -31,17 +31,32 @@ unchanged. The new T3 generators have their own native T4 upgrade button.
 
 ## Fitting and economy
 
-Select one modular generator to open its panel. Click an eligible module to queue
-installation. Click an installed module to remove it. Removing equipment is free,
-gives no refund and is rejected while an installed dependent still needs it.
-The panel reports the dependent ID. Use the queue tab to cancel any pending job.
-Module fitting/removal uses the native buttons in the side panel; the bottom
-command bar provides the chassis upgrade. Locked module buttons show their reason.
-Paid progress updates live in the panel and the generator's native construction
-bar. Contributing engineers show the same paid progress in their native bars,
-including when joining midway. Their bars clear when assistance ends.
-Pausing retains generator progress; completion/cancellation clears the finished job and
-queue buttons. The native bar remains available with the module panel closed.
+Select one modular generator to open the image dock at the bottom center, above
+FAF's native construction UI. The **Modules** row contains installed equipment and
+pending jobs; **Upgrades** shows the next level of each family and available special
+modules. Locked icons remain visible with an explanatory hover popup.
+
+Left-click an upgrade icon to queue it. Its icon moves to Modules, becomes gray and
+shows paid installation progress. Right-click a pending icon to cancel it; queued
+dependents cancel with their prerequisite. Right-click installed equipment to queue
+removal. Removal takes five seconds at the base work rate, can be assisted, costs
+no resources and gives no refund. Its effect, upkeep and occupied slot remain until
+removal finishes. Right-click a removing icon to cancel removal and keep the module.
+Installed or queued dependents prevent removing their prerequisite.
+
+The blue readout is live shield HP / maximum HP. Green shows actual current shield
+regeneration, including full/offline/damage-delay states. Red shows average actual
+shield HP lost over the last five seconds; regeneration does not hide damage.
+Hover popups show blue capacity changes, green regeneration/repair changes, cyan
+radius changes, orange special protection effects and gold costs/upkeep. Equipped
+module tooltips preview losses on removal. The pause and repair-aura icons at the
+top right have their own hover help. Chassis upgrading remains in the native bar.
+
+Each module has a faction-specific geometric icon, with level pips and distinct
+family symbols. Textures are deterministic rasterizations of vector primitives,
+not AI imagery. Rebuild them with `python scripts/generate_module_icons.py` (Pillow):
+96 SVG sources go to `artifacts/module-icons/svg`, and 192 full-color/dim DDS assets
+go into the mod. No reference-mod or stock artwork is redistributed.
 
 T3 has four slots; T4 has eight. Power, Range, Regen and Repair each have five
 incremental levels. Every completed level occupies its own slot, retains its own
@@ -186,7 +201,7 @@ This runs pure rules, adapter/economy, blueprint and gameplay/lifecycle checks, 
 parses every Lua/blueprint source. The engine mocks cover once-only interceptions,
 paid work and starvation, assistant release, body bounce/breakup, deferred cargo,
 upgrade transfer, ground behavior, neighbor rules and legendary activation.
-UI checks also exercise native-control layout, persistent buttons and the secured
+UI checks also exercise image layout, persistent controls and the secured
 simulation callback for fitting, removal, cancellation and pausing, including FAF's
 recursive unit-data merge and cleanup of completed/cancelled queue controls.
 

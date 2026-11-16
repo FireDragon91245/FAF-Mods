@@ -13,6 +13,7 @@ Export = {
     InstallRate = 40,
     InstallMaxRate = 10000,
     InstallSliceSeconds = .5,
+    RemovalSeconds = 5,
     NeighborScanMargin = 16,
     NeighborEdgeTolerance = .05,
     RepairFactor = .75,

@@ -17,12 +17,15 @@ AI shield construction/planning is outside the requested scope.
 ## First pass: construction and fitting
 
 1. Enable only Modular Shields (playtest). Build/spawn all eight faction chassis.
-   Verify models, shield animations, icons, build access and module panel positioning.
+   Verify models, shield animations, faction icons, build access and bottom-center dock positioning.
 2. Damage a dome and fit Power I. Current HP must not jump. Range must resize both
    mesh and collision. Regen must heal after the normal damage delay.
 3. Queue Power I-IV on T3; V must be refused. Removing I while II remains must name
    the dependent. Remove descending levels; verify slots, clamped HP and upkeep.
-4. Install with zero, one and several guarding engineers. Engineers contributing to
+4. Left-click upgrade images; right-click pending images to cancel or equipped images
+   to queue a five-second base removal. Verify modules retain benefits/slots until
+   removal completes, cancellation retains the module and prerequisite locks apply.
+   Install with zero, one and several guarding engineers. Engineers contributing to
    module work show continuous build beams and remain counted throughout the job;
    their build arms are extended without a disabled icon. Idle guards must not repair
    the shield or draw construction resources. Measure time and total
@@ -37,7 +40,7 @@ AI shield construction/planning is outside the requested scope.
    double work or refunds. Confirm maintenance changes in the economy display.
    Watch the live percentage and native construction bar with the side panel open
    and closed. Cancel a queue with dependent jobs, then complete a new job: no old
-   percentage or cancel-button label should remain. Switch tabs during the job.
+   percentage or cancel-button label should remain. Hover equipped/available icons during the job; test right-click cancel and timed removal.
 6. Test repair on differently priced structures, foundations, full-health targets,
    other-army allies, overlapping auras and empty mass storage. Verify the shared HP
    budget, mass spent per delivered HP and target/range/death cleanup.

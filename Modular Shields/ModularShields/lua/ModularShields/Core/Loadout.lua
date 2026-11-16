@@ -16,7 +16,7 @@ end
 local function Used(s, r)
     local n = 0
     for id in pairs(s.Installed) do n = n + r.Modules[id].Slots end
-    for _, job in ipairs(s.Queue) do n = n + r.Modules[job.ModuleId].Slots end
+    for _, job in ipairs(s.Queue) do if job.Kind~='Remove' then n = n + r.Modules[job.ModuleId].Slots end end
     return n
 end
 local function Quote(s, id, r, config)
@@ -43,7 +43,7 @@ local function Eligible(s, id, r, config, includeQueue)
     for key in pairs(s.Installed) do installed[key] = true end
     for _, job in ipairs(s.Queue) do
         if job.ModuleId == id then return { Code = 'AlreadyQueued' } end
-        if includeQueue then installed[job.ModuleId] = true end
+        if includeQueue then installed[job.ModuleId] = job.Kind~='Remove' or nil end
     end
     if Used(s, r) + d.Slots > config.Chassis[s.Chassis].Slots then return { Code = 'NoFreeSlot' } end
     return Requirements(d.Requires, installed, s.Capabilities)
@@ -63,12 +63,15 @@ local function Invalidate(s, r)
     local available, kept = {}, {}
     for id in pairs(s.Installed) do available[id] = true end
     for _, job in ipairs(s.Queue) do
-        if Requirements(r.Modules[job.ModuleId].Requires, available, s.Capabilities) then job.State = 'Cancelled'
+        if job.Kind=='Remove' then
+            if available[job.ModuleId] then table.insert(kept,job);available[job.ModuleId]=nil
+            else job.State='Cancelled' end
+        elseif Requirements(r.Modules[job.ModuleId].Requires, available, s.Capabilities) then job.State = 'Cancelled'
         else kept[table.getn(kept)+1] = job; available[job.ModuleId] = true end
     end
     s.Queue = kept
 end
-local function Remove(s, id, r)
+local function CanRemove(s, id, r)
     if not s.Installed[id] then return { Code = 'NotInstalled' } end
     local remaining = {}
     for key in pairs(s.Installed) do if key ~= id then remaining[key] = true end end
@@ -78,7 +81,36 @@ local function Remove(s, id, r)
             if reason and reason.Code ~= 'MissingAdjacentPower' then return { Code = 'DependentModule', Module = key } end
         end
     end
+end
+local function Remove(s,id,r)
+    local reason=CanRemove(s,id,r)
+    if reason then return reason end
     s.Installed[id] = nil; Invalidate(s,r); s.Revision = s.Revision + 1
+end
+local function CanUninstall(s,id,r)
+    local reason=CanRemove(s,id,r)
+    if reason then return reason end
+    for _,job in ipairs(s.Queue) do
+        if job.ModuleId==id then return {Code='AlreadyQueued'} end
+        if job.Kind~='Remove' then
+            local remaining={}
+            for key in pairs(s.Installed) do if key~=id then remaining[key]=true end end
+            for _,queued in ipairs(s.Queue) do
+                if queued.Kind~='Remove' then remaining[queued.ModuleId]=true end
+            end
+            local failure=Requirements(r.Modules[job.ModuleId].Requires,remaining,s.Capabilities)
+            if failure and failure.Module==id then return {Code='DependentModule',Module=job.ModuleId} end
+        end
+    end
+end
+local function RequestUninstall(s,id,r,config)
+    local reason=CanUninstall(s,id,r)
+    if reason then return nil,reason end
+    s.NextJob=s.NextJob+1
+    local job={JobId=s.NextJob,ModuleId=id,Kind='Remove',State='Queued',PaidWork=0,MassSpent=0,EnergySpent=0,
+        Quote={Mass=0,Energy=0,Upkeep=0,Slots=0,Seconds=config.RemovalSeconds,Work=config.RemovalSeconds*config.InstallRate}}
+    table.insert(s.Queue,job);s.Revision=s.Revision+1
+    return job
 end
 local function Cancel(s, jobId, r)
     for i, job in ipairs(s.Queue) do
@@ -92,6 +124,13 @@ end
 local function Complete(s, job, r, config)
     if s.Queue[1] ~= job or job.State == 'Cancelled' then return { Code = 'InvalidJob' } end
     if job.PaidWork < job.Quote.Work then return { Code = 'UnpaidWork' } end
+    if job.Kind=='Remove' then
+        local reason=CanRemove(s,job.ModuleId,r)
+        if reason then return reason end
+        s.Installed[job.ModuleId]=nil;job.State='Completed';table.remove(s.Queue,1)
+        Invalidate(s,r);s.Revision=s.Revision+1
+        return
+    end
     local d = r.Modules[job.ModuleId]
     local reason = Requirements(d.Requires, s.Installed, s.Capabilities)
     if reason then return reason end
@@ -102,6 +141,7 @@ end
 Export = { New = function(chassis, base) return { Chassis = chassis, Base = base, Installed = {}, Queue = {},
     Capabilities = {}, NextJob = 0, Revision = 0 } end,
     Requirements = Requirements, Used = Used, Quote = Quote, Eligible = Eligible,
-    RequestInstall = Request, RequestRemove = Remove, RequestCancel = Cancel, Complete = Complete }
+    RequestInstall = Request, RequestRemove = Remove, RequestUninstall=RequestUninstall,
+    CanRemove=CanRemove, CanUninstall=CanUninstall, RequestCancel = Cancel, Complete = Complete }
 
 return Export

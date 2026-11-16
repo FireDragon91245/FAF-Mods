@@ -8,6 +8,7 @@ local Repair = import(root .. 'Behaviors/Repair.lua').Export
 local Combat = import(root .. 'Services/Combat.lua').Export
 local Transfer = import(root .. 'Services/Transfer.lua').Export
 local Ground = import(root .. 'Behaviors/GroundBarrier.lua').Export
+local Telemetry = import(root .. 'Services/Telemetry.lua').Export
 local function MakeGenerator(Base)
     return ClassUnit(Base) {
         OnStopBeingBuilt = function(self, builder, layer)
@@ -29,6 +30,7 @@ local function MakeGenerator(Base)
                 while not self.Dead do
                     local before=self.ModuleAssistantCount
                     Assist.Rate(self,R.Config)
+                    if math.mod(GetGameTick(),2)==0 then self.Sync.ModularShieldLive=Telemetry.Snapshot(self) end
                     if before~=self.ModuleAssistantCount then self:PublishModules() end
                     WaitTicks(1)
                 end
@@ -53,6 +55,7 @@ local function MakeGenerator(Base)
             end
             local caps,effects = R.Neighbors.Evaluate(R.Registry,facts,self.Loadout.Installed)
             self.Loadout.Capabilities = caps
+            self.ModuleNeighborEffects=effects
             self.ModuleStats = R.Stats.Calculate(self.Loadout,R.Registry,R.Config,effects)
             Shield.Apply(self,self.ModuleStats)
             Combat.Invalidate()
@@ -84,16 +87,33 @@ local function MakeGenerator(Base)
         PublishModules = function(self)
             if not self.Loadout then return end
             Jobs.UpdateProgress(self)
-            local s, rows = self.Loadout, {}
+            local s=self.Loadout
+            local rows=self.ModuleRows
+            if not rows or self.ModuleRowsRevision~=s.Revision or self.ModuleRowsStats~=self.ModuleStats then
+            rows={}
             for _, id in ipairs(R.Registry.Order) do
+                local definition=R.Registry.Modules[id]
                 local reason = R.Core.Eligible(s,id,R.Registry,R.Config,true)
                 local quote = s.Installed[id] and s.Installed[id].Quote or R.Core.Quote(s,id,R.Registry,R.Config)
+                local hypothetical={Base=s.Base,Installed={},Capabilities=s.Capabilities,Rules=R.Core}
+                for key,value in pairs(s.Installed) do hypothetical.Installed[key]=value end
+                hypothetical.Installed[id]=not s.Installed[id] and {Id=id,Quote=quote} or nil
+                local preview=R.Stats.Calculate(hypothetical,R.Registry,R.Config,self.ModuleNeighborEffects)
+                local deltas={}
+                for _,stat in ipairs({'ShieldMaxHP','ShieldSize','ShieldRegen','RepairBudget','Upkeep'}) do
+                    deltas[stat]=(preview[stat]-self.ModuleStats[stat])*(s.Installed[id] and -1 or 1)
+                end
                 rows[table.getn(rows)+1] = { Id = id, Name = R.Registry.Modules[id].UI.Name,
+                    Family=definition.Family,Level=definition.Level,Deltas=deltas,Behavior=definition.Behavior or false,
                     Installed = s.Installed[id] ~= nil, Reason = reason and reason.Code or false,
+                    RemoveReason=s.Installed[id] and R.Core.CanUninstall(s,id,R.Registry) or false,
                     Detail = reason and (reason.Module or reason.Behavior) or false, Quote = quote }
+            end
+            self.ModuleRows=rows;self.ModuleRowsRevision=s.Revision;self.ModuleRowsStats=self.ModuleStats
             end
             local job = s.Queue[1]
             self.Sync.ModularShield = { Used = R.Core.Used(s,R.Registry), Slots = R.Config.Chassis[s.Chassis].Slots,
+                Faction=self.Blueprint.ModularShield.Faction,RemovalSeconds=R.Config.RemovalSeconds,
                 Rows = rows, Stats = self.ModuleStats, LastReason = self.ModuleReason or false,
                 InstallPaused = self.InstallPaused or false, RepairPaused = self.RepairPaused or false,
                 Assistants=self.ModuleAssistantCount or 0, WorkRate=self.ModuleWorkRate or R.Config.InstallRate,
@@ -102,8 +122,9 @@ local function MakeGenerator(Base)
                 NativeAdjacency=self.EnergyMaintAdjMod or 1,
                 PowerProviders=self.ModulePowerProviders or 0,
                 Queue=table.deepcopy(s.Queue), QueueCount=table.getn(s.Queue), RepairMass=self.ModuleRepairMass or 0,
-                Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,
+                Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,Kind=job.Kind or 'Install',
                     Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } or false }
+            self.Sync.ModularShieldLive=Telemetry.Snapshot(self)
         end,
         RequestModuleInstall = function(self,id)
             if not self.Loadout or self.Dead then return end
@@ -118,7 +139,8 @@ local function MakeGenerator(Base)
             if action == 'install' and type(value) == 'string' then return self:RequestModuleInstall(value) end
             local reason
             if action == 'remove' and type(value) == 'string' then
-                Jobs.Stop(self); reason = R.Core.RequestRemove(self.Loadout,value,R.Registry)
+                local job
+                job,reason=R.Core.RequestUninstall(self.Loadout,value,R.Registry,R.Config)
             elseif action == 'cancel' and type(value) == 'number' then
                 Jobs.Stop(self); reason = R.Core.RequestCancel(self.Loadout,value,R.Registry)
             elseif action == 'pause' then

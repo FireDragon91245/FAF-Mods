@@ -5,6 +5,16 @@ local function Service()
     return Combat
 end
 Shield=Class(PreviousShield) {
+    ApplyDamage=function(self,instigator,amount,vector,damageType,overspill)
+        local host=self.Owner
+        if not (host and host.Loadout) then return PreviousShield.ApplyDamage(self,instigator,amount,vector,damageType,overspill) end
+        local before=math.max(0,self:GetHealth())
+        local result=PreviousShield.ApplyDamage(self,instigator,amount,vector,damageType,overspill)
+        local after=not IsDestroyed(self) and math.max(0,self:GetHealth()) or 0
+        import('/mods/ModularShields/lua/ModularShields/Services/Telemetry.lua').Export.Damage(host,
+            math.max(0,before-after))
+        return result
+    end,
     CreateImpactEffect=function(self,vector)
         if self.Owner and self.Owner.Blueprint.ModularShield then self.ModularImpactSerial=(self.ModularImpactSerial or 0)+1 end
         return PreviousShield.CreateImpactEffect(self,vector)
