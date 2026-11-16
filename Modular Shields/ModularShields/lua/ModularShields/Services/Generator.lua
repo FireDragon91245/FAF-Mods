@@ -4,6 +4,7 @@ local Assist = import(root .. 'Adapters/Assistance.lua').Export
 local Jobs = import(root .. 'Services/InstallJobs.lua').Export
 local Shield = import(root .. 'Adapters/Shield.lua').Export
 local Adjacency = import(root .. 'Adapters/Adjacency.lua').Export
+local AdjacencyEffects = import(root .. 'Adapters/AdjacencyEffects.lua').Export
 local Repair = import(root .. 'Behaviors/Repair.lua').Export
 local Combat = import(root .. 'Services/Combat.lua').Export
 local Transfer = import(root .. 'Services/Transfer.lua').Export
@@ -48,6 +49,7 @@ local function MakeGenerator(Base)
         ReconcileModules = function(self,excludedNeighbor)
             if not self.Loadout then return end
             local facts=Adjacency.Snapshot(self,R.Registry,R.Config,excludedNeighbor)
+            AdjacencyEffects.Sync(self,facts)
             self.ModulePowerProviders=0
             self.ModuleNeighbors={Power=0,Production=0,EnergyStorage=0,MassStorage=0}
             for _,fact in ipairs(facts) do
@@ -233,11 +235,13 @@ local function MakeGenerator(Base)
             end,
         },
         OnGiven = function(self,newUnit)
+            AdjacencyEffects.Clear(self)
             Jobs.Stop(self);Assist.ReleaseAll(self)
             if newUnit.Loadout then Transfer.Restore(newUnit,self.TransferSnapshot or Transfer.Snapshot(self,false)) end
             Base.OnGiven(self,newUnit)
         end,
         OnDestroy = function(self)
+            AdjacencyEffects.Clear(self)
             Jobs.Stop(self);Assist.ReleaseAll(self)
             Combat.Unregister(self)
             self.BarrierActive=false;self.BarrierRecords=nil
@@ -245,6 +249,7 @@ local function MakeGenerator(Base)
             Base.OnDestroy(self)
         end,
         OnKilled = function(self,instigator,damageType,overkillRatio)
+            AdjacencyEffects.Clear(self)
             Jobs.Stop(self);Assist.ReleaseAll(self)
             Combat.Unregister(self)
             self.BarrierActive=false;self.BarrierRecords=nil

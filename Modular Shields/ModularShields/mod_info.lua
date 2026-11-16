@@ -1,6 +1,6 @@
 name = 'Modular Shields (playtest)'
 uid = 'bf55b8d0-2026-4115-9000-000000000001'
-version = 11
+version = 12
 description = 'Modular T3/T4 shields: paid assisted installations, repairs, aircraft deflection, nuclear containment and legendary ground denial. Ready for gameplay testing.'
 author = 'Rick'
 selectable = true

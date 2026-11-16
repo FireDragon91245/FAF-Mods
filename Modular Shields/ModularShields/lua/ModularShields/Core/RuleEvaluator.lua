@@ -39,7 +39,13 @@ local function Evaluate(registry,facts,installed)
             local scale=1
             if rule.PerProvider then
                 scale=0
-                for n=1,count do scale=scale+(rule.Diminishing or 1)^(n-1) end
+                -- FAF's ^ operator is XOR, unlike stock Lua exponentiation.
+                -- Iterative weights work in both runtimes, including diminishing rules.
+                local weight=1
+                for n=1,count do
+                    scale=scale+weight
+                    weight=weight*(rule.Diminishing or 1)
+                end
             end
             if rule.ScaleBy then
                 scale=0

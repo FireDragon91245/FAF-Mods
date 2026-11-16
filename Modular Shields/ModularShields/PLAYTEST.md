@@ -113,3 +113,12 @@ mods one at a time. Do not claim compatibility or balance before recording resul
 - Send light, heavy and experimental ground units into Impenetrable. Verify weighted
   shield costs, impact visuals, approximately 1.5 seconds of return travel and no
   repeated damage within the per-unit 15-tick cooldown. Collapse stops denial.
+
+## Version 12 storage regression
+
+- Attach six mass storages: expect exactly +6 slots (T3 total 10, T4 total 14).
+- Attach six energy storages: expect exactly +60% of chassis base HP, subject to
+  the existing cap. Repeated reconciliation must not accumulate extra bonuses.
+- Both storage types should show vanilla faction adjacency links. Verify all four
+  factions, storage completion, removal/capture, host destruction and upgrading.
+  Existing native links should be reused; repeated updates must not duplicate them.

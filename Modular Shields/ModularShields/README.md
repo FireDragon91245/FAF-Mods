@@ -161,6 +161,13 @@ still apply. Normal native power-adjacency upkeep discounts remain active and ar
 not applied a second time. The dock shows provider counts, live energy production,
 base/extra slots, the upkeep multiplier and the separate effective HP/regen sources.
 Physical edges are reconciled once per second and on native adjacency events.
+Mass and energy storage connections use the same faction-specific adjacency
+nodes/beams as vanilla generators. Links appear for completed own edge-adjacent
+storage and are cleaned up on separation, destruction or ownership change.
+
+Storage bonuses stack linearly: six mass storages add six slots; six energy
+storages add 60% of base capacity. Per-provider diminishing weights use iterative
+multiplication for compatibility with FAF's Lua dialect (`^` is XOR there).
 
 Ground denial returns enemy mobile land/seabed units to their last safe exterior
 position, or chooses a pathable, unoccupied exterior point. It runs every simulation

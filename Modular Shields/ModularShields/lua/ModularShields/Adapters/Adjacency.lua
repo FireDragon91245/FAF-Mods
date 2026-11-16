@@ -59,7 +59,7 @@ local function Snapshot(host,registry,config,excluded)
                     local cats=bp.CategoriesHash or {}
                     local production=(bp.Economy or {}).ProductionPerSecondEnergy or 0
                     if neighbor.GetProductionPerSecondEnergy then production=neighbor:GetProductionPerSecondEnergy() end
-                    facts[table.getn(facts)+1]={Id=id,Tags=Tags(bp,registry,production),EdgeAdjacent=true,EnergyProduction=math.max(0,production),
+                    facts[table.getn(facts)+1]={Id=id,Unit=neighbor,Tags=Tags(bp,registry,production),EdgeAdjacent=true,EnergyProduction=math.max(0,production),
                         SameArmy=neighbor.Army==host.Army,Completed=neighbor:GetFractionComplete()==1,
                         Tier=cats.EXPERIMENTAL and 't4' or cats.TECH3 and 't3' or cats.TECH2 and 't2' or 't1'}
                 end
