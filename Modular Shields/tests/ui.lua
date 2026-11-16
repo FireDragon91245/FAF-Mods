@@ -14,7 +14,7 @@ function table.merged(base,patch)
 end
 local function loadCore(path)
     local env=setmetatable({}, {__index=_G})
-    return assert(loadfile('ModularShields/lua/ModularShields/'..path,'t',env))()
+    return assert(loadfile('src/lua/ModularShields/'..path,'t',env))()
 end
 local R=loadCore('Bootstrap.lua').Build(loadCore)
 local controls={}
@@ -69,7 +69,7 @@ local selected={{GetEntityId=function() return 1001 end}}
 function GetSelectedUnits() return selected end
 UnitData={[1001]={OtherMod={Keep=true}}}
 function OnSync() UnitData=table.merged(UnitData,Sync.UnitData) end
-assert(loadfile('ModularShields/hook/lua/UserSync.lua'))()
+assert(loadfile('src/hook/lua/UserSync.lua'))()
 local paused,repairPaused=false,false
 local function sync()
     local rows={}
@@ -103,7 +103,7 @@ end}
 local secureCalled=false
 function SecureUnits(units) secureCalled=true;assert(units[1]==owned);return units end
 function DoCallback() error('Unexpected fallback') end
-assert(loadfile('ModularShields/hook/lua/SimCallbacks.lua'))()
+assert(loadfile('src/hook/lua/SimCallbacks.lua'))()
 function SimCallback(request,withSelection)
     assert(withSelection==true)
     sent[#sent+1]=request;DoCallback(request.Func,request.Args,{owned})

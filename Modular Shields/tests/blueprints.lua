@@ -4,7 +4,7 @@ math.mod = math.mod or math.fmod
 -- RuleInit's Lua math library does not provide the modern math.huge constant.
 local originalHuge=math.huge
 math.huge=nil
-local root='ModularShields'
+local root='src'
 local count=0
 local function check(v,msg) count=count+1;assert(v,msg) end
 function table.deepcopy(t)

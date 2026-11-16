@@ -6,7 +6,7 @@ function table.deepcopy(t)
     local copy={};for k,v in pairs(t) do copy[k]=table.deepcopy(v) end;return copy
 end
 local cache={}
-local root='ModularShields/lua/ModularShields/'
+local root='src/lua/ModularShields/'
 local tick=100
 local effects=0
 function import(path)

@@ -12,7 +12,7 @@ end
 math.mod=math.mod or math.fmod
 local function load(path)
     local env=setmetatable({}, {__index=_G})
-    return assert(loadfile('ModularShields/lua/ModularShields/'..path,'t',env))()
+    return assert(loadfile('src/lua/ModularShields/'..path,'t',env))()
 end
 local R=load('Bootstrap.lua').Build(load)
 local s=R.Core.New('t3',{Mass=1000,Energy=10000,Upkeep=100})

@@ -4,7 +4,7 @@
 .DESCRIPTION
     1. Generates module icon artifacts (artifacts/module-icons) if missing or -Regenerate.
     2. Runs ./test.ps1 unless -SkipTests.
-    3. Assembles dist/ModularShields (mod sources + generated textures) and
+    3. Assembles dist/ModularShields (src/, README, PLAYTEST + generated textures) and
        dist/ModularShields-v<version>.zip.
     4. With -Install, mirrors dist/ModularShields into the FAF mods folder.
 .EXAMPLE
@@ -21,7 +21,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $name = 'ModularShields'
-$source = Join-Path $root $name
+$source = Join-Path $root 'src'
 $icons = Join-Path $root 'artifacts\module-icons\textures\modules'
 $dist = Join-Path $root 'dist'
 $out = Join-Path $dist $name
@@ -39,6 +39,7 @@ Write-Host "== Bundling $out" -ForegroundColor Cyan
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory $out -Force | Out-Null
 Copy-Item (Join-Path $source '*') $out -Recurse
+Copy-Item (Join-Path $root 'README.md'),(Join-Path $root 'PLAYTEST.md') $out
 $textures = Join-Path $out 'textures\modules'
 New-Item -ItemType Directory $textures -Force | Out-Null
 Copy-Item (Join-Path $icons '*.dds') $textures

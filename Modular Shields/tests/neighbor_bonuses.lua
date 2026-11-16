@@ -1,6 +1,6 @@
 table.getn=table.getn or function(t) return #t end
 math.mod=math.mod or math.fmod
-local root='ModularShields/lua/ModularShields/'
+local root='src/lua/ModularShields/'
 local function load(path) local env=setmetatable({}, {__index=_G});return assert(loadfile(root..path,'t',env))() end
 local R=load('Bootstrap.lua').Build(load)
 local count=0

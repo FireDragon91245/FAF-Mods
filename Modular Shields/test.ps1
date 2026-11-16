@@ -11,7 +11,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$mod = Join-Path $root 'ModularShields'
+$mod = Join-Path $root 'src'
 
 foreach ($tool in 'lua','luac') {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "'$tool' was not found on PATH." }

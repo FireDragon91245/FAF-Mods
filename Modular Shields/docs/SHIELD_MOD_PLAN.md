@@ -1,6 +1,6 @@
 # Modular Shields: research and implementation plan
 
-Implementation update: the playtest build is in [ModularShields](../ModularShields/README.md). The user clarified that AI support means identical shield behavior against AI and player attackers; AI construction/loadout planning is outside scope. The user authorized implementing the remaining mechanics before in-game playtesting. The earlier proposal and acceptance criteria below are retained as design history.
+Implementation update: the playtest build is in [README](../README.md). The user clarified that AI support means identical shield behavior against AI and player attackers; AI construction/loadout planning is outside scope. The user authorized implementing the remaining mechanics before in-game playtesting. The earlier proposal and acceptance criteria below are retained as design history.
 
 Research date: 15 November 2026. This is a design proposal, not implemented gameplay.
 

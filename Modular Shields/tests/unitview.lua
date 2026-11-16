@@ -3,7 +3,7 @@ function UpdateWindow(info) received=info end
 local text
 controls={shieldText={IsHidden=function() return false end,SetText=function(_,s) text=s end}}
 UnitData={[1]={ModularShield={},ModularShieldRepairMass=3.75,ModularShieldLive={HP=1234,MaxHP=2000,Regen=12.5}}}
-assert(loadfile('ModularShields/hook/lua/ui/game/unitview.lua'))()
+assert(loadfile('src/hook/lua/ui/game/unitview.lua'))()
 local original={entityId=1,massConsumed=2,massRequested=4}
 UpdateWindow(original)
 assert(received.massConsumed==5.75 and received.massRequested==7.75,'Repair spending must add to native work rather than replace it')

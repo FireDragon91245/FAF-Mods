@@ -11,7 +11,7 @@ function import(path)
     end}
 end
 local env=setmetatable({}, {__index=_G})
-local A=assert(loadfile('ModularShields/lua/ModularShields/Adapters/AdjacencyEffects.lua','t',env))()
+local A=assert(loadfile('src/lua/ModularShields/Adapters/AdjacencyEffects.lua','t',env))()
 local count=0
 local function check(v,message) count=count+1;assert(v,message) end
 local h={EntityId=1}

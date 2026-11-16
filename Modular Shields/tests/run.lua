@@ -3,7 +3,7 @@ table.getn = table.getn or function(t) return #t end
 math.mod = math.mod or math.fmod
 local originalHuge=math.huge
 math.huge=nil
-local root = 'ModularShields/lua/ModularShields/'
+local root = 'src/lua/ModularShields/'
 local function load(path)
     local env = setmetatable({}, { __index = _G })
     local result = assert(loadfile(root .. path,'t',env))()

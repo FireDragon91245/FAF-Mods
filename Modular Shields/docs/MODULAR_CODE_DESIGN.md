@@ -1,6 +1,6 @@
 # Modular Shields: configurable code design
 
-Implementation update: the playtest build is in [ModularShields](../ModularShields/README.md). The user clarified that AI support means identical shield behavior against AI and player attackers; AI construction/loadout planning is outside scope. The user authorized implementing the remaining mechanics before in-game playtesting. The earlier proposal and acceptance criteria below are retained as design history.
+Implementation update: the playtest build is in [README](../README.md). The user clarified that AI support means identical shield behavior against AI and player attackers; AI construction/loadout planning is outside scope. The user authorized implementing the remaining mechanics before in-game playtesting. The earlier proposal and acceptance criteria below are retained as design history.
 
 This is the code design for subsequent implementation, not a working mod. It refines SHIELD_MOD_PLAN.md with the user's cumulative slot rule, engineer-assisted installation, extensible neighbor effects and AI support.
 

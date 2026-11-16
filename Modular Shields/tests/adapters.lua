@@ -1,7 +1,7 @@
 -- Compatibility shims for the FAF Lua 5.0 APIs used by production code.
 table.getn = table.getn or function(t) return #t end
 math.mod = math.mod or math.fmod
-local root='ModularShields/lua/ModularShields/'
+local root='src/lua/ModularShields/'
 local modules={}
 local shieldLibrary={LargestShieldDiameter=0}
 function import(path)
