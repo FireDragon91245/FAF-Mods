@@ -1,6 +1,6 @@
 # Modular Shields — playtest build
 
-Standalone simulation mod implementing SHIELD_MOD_PLAN.md and MODULAR_CODE_DESIGN.md,
+Standalone simulation mod implementing docs/SHIELD_MOD_PLAN.md and docs/MODULAR_CODE_DESIGN.md,
 with the user's clarified scope: shields handle AI-controlled attackers exactly as
 player-controlled attackers. The mod does not make an AI build, equip or plan shields.
 
@@ -54,9 +54,10 @@ top right have their own hover help. Chassis upgrading remains in the native bar
 
 Each module has a faction-specific geometric icon, with level pips and distinct
 family symbols. Textures are deterministic rasterizations of vector primitives,
-not AI imagery. Rebuild them with `python scripts/generate_module_icons.py` (Pillow):
-96 SVG sources go to `artifacts/module-icons/svg`, and 192 full-color/dim DDS assets
-go into the mod. No reference-mod or stock artwork is redistributed.
+not AI imagery. `build.ps1` generates them with `scripts/generate_module_icons.py`
+(Pillow) when missing: 96 SVG sources and 192 full-color/dim DDS assets go to
+`artifacts/module-icons`, and the DDS files are bundled into the mod.
+No reference-mod or stock artwork is redistributed.
 
 T3 has four base slots; T4 has eight. Each completed, own edge-adjacent mass
 storage adds one slot. Power, Range, Regen and Repair each have five
@@ -231,14 +232,14 @@ energy-storage and mass-storage bonuses are enabled by default as described abov
 production-weighted scaling is supported in declarative neighbor rules.
 
 Third-party custom death paths and custom projectiles can require additional adapters.
-The supported baseline is the installed FAF source audited in research/sources.json;
+The supported baseline is the installed FAF source audited during development;
 no FAF release has yet been certified by an in-game run. Balance, terrain/pathfinding
 edge cases, dense overlaps, visual scale, compatibility and late-game simulation cost
 are the focus of the upcoming playtest.
 
 ## Verification
 
-From the workspace root run `./tests/run.ps1` (PowerShell, Lua and luac on PATH).
+From the project root run `./test.ps1` (PowerShell, Lua and luac on PATH).
 This runs pure rules, adapter/economy, blueprint and gameplay/lifecycle checks, then
 parses every Lua/blueprint source. The engine mocks cover once-only interceptions,
 paid work and starvation, assistant release, body bounce/breakup, deferred cargo,
