@@ -1,36 +1,73 @@
 -- Sim side of the debug tools: per-army infinite resources.
 --
--- Enabling a resource adds a large storage boost and tops storage up every tick, so
--- even instant builds of experimentals never stall. Disabling removes the boost again.
+-- Enabling a resource spawns a hidden helper unit whose blueprint carries a huge
+-- storage (units/FDT0001 energy, units/FDT0002 mass) and tops storage up every tick,
+-- so even instant builds of experimentals never stall. Disabling destroys the helper.
+--
+-- The engine sums helper storage with every other storage unit, so the boost survives
+-- building, upgrading or losing storage. brain:GiveStorage cannot be used: the engine
+-- keeps a single GiveStorage bonus for one resource, so a mass boost wipes the energy
+-- boost (and vanilla's +100 energy) and vice versa.
 
 local SimUtils = import('/lua/simutils.lua')
 
-StorageBoost = 1000000
 Callback = 'FireDragonDebugSetResource'
+Helpers = { ENERGY = 'fdt0001', MASS = 'fdt0002' }
 
 local MaxStorageStat = { ENERGY = 'Economy_MaxStorage_Energy', MASS = 'Economy_MaxStorage_Mass' }
-local StorageType = { ENERGY = 'Energy', MASS = 'Mass' }
 
 ---@type table<number, table<string, boolean>>
 Armies = {}
+---@type table<number, table<string, Unit>>
+Spawned = {}
 local loop
+
+local function MaxStorage(brain, resource)
+    return brain:GetArmyStat(MaxStorageStat[resource], 0).Value
+end
+
+local function Helper(army, resource)
+    local unit = Spawned[army] and Spawned[army][resource]
+    if unit and not IsDestroyed(unit) then return unit end
+end
+
+--- Spawns the storage helper of a resource unless the army already has one.
+function EnsureHelper(brain, army, resource)
+    if Helper(army, resource) then return false end
+    local x, z = brain:GetArmyStartPos()
+    x, z = x or 0, z or 0
+    Spawned[army] = Spawned[army] or {}
+    Spawned[army][resource] = CreateUnitHPR(Helpers[resource], army, x, GetSurfaceHeight(x, z), z, 0, 0, 0)
+    return true
+end
+
+function RemoveHelper(army, resource)
+    local unit = Helper(army, resource)
+    if unit then unit:Destroy() end
+    if Spawned[army] then Spawned[army][resource] = nil end
+end
 
 --- Tops the brain's storage of one resource up to its maximum.
 function Fill(brain, resource)
-    local missing = brain:GetArmyStat(MaxStorageStat[resource], 0).Value - brain:GetEconomyStored(resource)
+    local missing = MaxStorage(brain, resource) - brain:GetEconomyStored(resource)
     if missing > 0 then brain:GiveResource(resource, missing) end
     return missing
 end
 
---- Fills every enabled resource once; returns whether anything is still enabled.
+--- Keeps helpers alive and storage full for every enabled resource; returns whether
+--- anything is still enabled. Defeated armies lose their toggles and helpers.
 function Tick()
     local active = false
     for army, state in pairs(Armies) do
         local brain = ArmyBrains[army]
-        for resource in pairs(MaxStorageStat) do
-            if state[resource] then
+        if not brain or brain:IsDefeated() then
+            for resource in pairs(state) do RemoveHelper(army, resource) end
+            Armies[army] = nil
+        else
+            for resource in pairs(state) do
                 active = true
-                if brain then Fill(brain, resource) end
+                EnsureHelper(brain, army, resource)
+                Fill(brain, resource)
             end
         end
     end
@@ -53,10 +90,12 @@ function Set(army, resource, enabled)
     if (state[resource] == true) == enabled then return true end
 
     state[resource] = enabled or nil
-    brain:GiveStorage(StorageType[resource], enabled and StorageBoost or -StorageBoost)
     if enabled then
+        EnsureHelper(brain, army, resource)
         Fill(brain, resource)
         if not loop then loop = ForkThread(Loop) end
+    else
+        RemoveHelper(army, resource)
     end
     return true
 end

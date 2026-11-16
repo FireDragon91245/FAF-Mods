@@ -1,0 +1,27 @@
+-- Hidden helper that gives its army energy storage while Infinite Energy is on.
+-- Modelled on FAF's ZXA0003 dummy: no mesh, no collision, no vision, costs no unit cap.
+UnitBlueprint {
+    Categories = {
+        'DUMMYUNIT',
+        'INSIGNIFICANTUNIT',
+        'INVULNERABLE',
+        'UNSELECTABLE',
+        'UNSPAWNABLE',
+        'UNTARGETABLE',
+    },
+    Description = 'FireDragon Debug Tools energy storage',
+    Economy = {
+        StorageEnergy = 1000000,
+    },
+    General = {
+        CapCost = 0,
+    },
+    Intel = { VisionRadius = 0 },
+    Physics = {
+        MotionType = 'RULEUMT_None',
+    },
+    SizeX = 0,
+    SizeY = 0,
+    SizeZ = 0,
+    CollisionShape = 'None',
+}

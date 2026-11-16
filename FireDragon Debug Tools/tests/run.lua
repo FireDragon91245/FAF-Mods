@@ -10,35 +10,74 @@ end
 local count = 0
 local function check(value, message) count = count + 1; assert(value, message) end
 
+-- Mirrors the engine: max storage is the base storage plus the storage of every live
+-- helper unit of the army. GiveStorage must not be used (the engine keeps only one
+-- GiveStorage bonus across both resources).
+local HelperStorage = { fdt0001 = { ENERGY = 1000000 }, fdt0002 = { MASS = 1000000 } }
+local world
+
 local function newBrain(maxEnergy, maxMass)
-    local brain = { stored = { ENERGY = 0, MASS = 0 }, max = { ENERGY = maxEnergy or 1000, MASS = maxMass or 500 }, storageCalls = {} }
+    local brain = { stored = { ENERGY = 0, MASS = 0 }, base = { ENERGY = maxEnergy or 1000, MASS = maxMass or 500 } }
     local stat = { Economy_MaxStorage_Energy = 'ENERGY', Economy_MaxStorage_Mass = 'MASS' }
-    function brain:GetArmyStat(name, default) return { Value = self.max[stat[name]] or default } end
+    function brain:Max(resource)
+        local max = self.base[resource]
+        for _, unit in ipairs(world) do
+            if unit.brain == self and not unit.destroyed then max = max + (HelperStorage[unit.id][resource] or 0) end
+        end
+        return max
+    end
+    function brain:GetArmyStat(name, default) return { Value = self:Max(stat[name]) or default } end
     function brain:GetEconomyStored(resource) return self.stored[resource] end
     function brain:GiveResource(resource, amount) self.stored[resource] = self.stored[resource] + amount end
-    function brain:GiveStorage(kind, amount)
-        table.insert(self.storageCalls, kind .. ':' .. amount)
-        local resource = kind == 'Energy' and 'ENERGY' or 'MASS'
-        self.max[resource] = self.max[resource] + amount
-    end
+    function brain:GiveStorage() error('GiveStorage must not be used') end
+    function brain:GetArmyStartPos() return 10, 20 end
+    function brain:IsDefeated() return self.defeated == true end
     return brain
 end
 
 local function newEconomy(brains, options)
     options = options or {}
+    world = {}
     local env = {
         ArmyBrains = brains,
         Sync = {},
         CheatsEnabled = function() return options.cheats ~= false end,
+        IsDestroyed = function(unit) return unit.destroyed == true end,
+        GetSurfaceHeight = function() return 7 end,
         import = function(path)
             assert(path == '/lua/simutils.lua', path)
             return { GetCurrentCommandSourceArmy = function() return options.army end }
         end,
     }
+    env.CreateUnitHPR = function(id, army, x, y, z)
+        local unit = { id = id, army = army, brain = brains[army], pos = { x, y, z } }
+        function unit:Destroy() self.destroyed = true end
+        table.insert(world, unit)
+        return unit
+    end
     env.forks = {}
     env.ForkThread = function(fn) table.insert(env.forks, fn); return #env.forks end
     env.WaitTicks = function() coroutine.yield() end
     return loadModule('src/lua/FireDragonDebugTools/Economy.lua', env)
+end
+
+local function helpers(id)
+    local n = 0
+    for _, unit in ipairs(world) do
+        if unit.id == id and not unit.destroyed then n = n + 1 end
+    end
+    return n
+end
+
+-- The helper blueprints carry the storage the mocks assume, and stay out of unit lists and cap.
+for id, storage in pairs(HelperStorage) do
+    local upper = string.upper(id)
+    local bp = assert(io.open('src/units/' .. upper .. '/' .. upper .. '_unit.bp')):read('a')
+    local field = storage.ENERGY and 'StorageEnergy' or 'StorageMass'
+    check(string.find(bp, field .. ' = 1000000', 1, true), id .. ' has its storage')
+    check(string.find(bp, "'DUMMYUNIT'", 1, true) and string.find(bp, 'CapCost = 0', 1, true), id .. ' is hidden and free')
+    local script = assert(io.open('src/units/' .. upper .. '/' .. upper .. '_script.lua')):read('a')
+    check(string.find(script, "import('/lua/sim/unit.lua').Unit", 1, true) and string.find(script, 'TypeClass = ' .. upper, 1, true), id .. ' script is a Unit')
 end
 
 -- Fill tops storage up exactly to the maximum.
@@ -48,34 +87,53 @@ brain.stored.ENERGY = 250
 check(E.Fill(brain, 'ENERGY') == 750 and brain.stored.ENERGY == 1000, 'Fill gives only the missing amount')
 check(E.Fill(brain, 'ENERGY') == 0 and brain.stored.ENERGY == 1000, 'Full storage receives nothing')
 
--- Enabling boosts storage, fills immediately and starts one loop.
+-- Enabling spawns a storage helper at the army start, fills, and starts one loop.
 brain = newBrain(); E = newEconomy({ brain })
 check(E.Set(1, 'ENERGY', true), 'Energy toggle accepted')
-check(brain.storageCalls[1] == 'Energy:' .. E.StorageBoost, 'Enabling adds the storage boost')
-check(brain.stored.ENERGY == 1000 + E.StorageBoost, 'Enabling fills the boosted storage')
-check(E.Set(1, 'MASS', true) and brain.stored.MASS == 500 + E.StorageBoost, 'Mass toggle fills mass')
+check(helpers('fdt0001') == 1 and world[1].army == 1 and world[1].pos[1] == 10 and world[1].pos[2] == 7 and world[1].pos[3] == 20, 'Enabling spawns the energy helper at the army start')
+check(brain.stored.ENERGY == 1001000, 'Enabling fills the boosted storage')
+check(E.Set(1, 'MASS', true) and helpers('fdt0002') == 1 and brain.stored.MASS == 1000500, 'Mass toggle spawns the mass helper and fills mass')
+check(brain:Max('ENERGY') == 1001000 and brain:Max('MASS') == 1000500, 'Both boosts hold at the same time')
 check(#E.forks == 1, 'A single resource loop serves every toggle')
-check(E.Set(1, 'MASS', true) and #brain.storageCalls == 2, 'Re-enabling does not stack the boost')
+check(E.Set(1, 'MASS', true) and helpers('fdt0002') == 1, 'Re-enabling does not stack helpers')
 
 -- The loop refills every tick and exits once everything is disabled.
 local loop = coroutine.create(E.forks[1])
 brain.stored.ENERGY = 0; brain.stored.MASS = 3
 assert(coroutine.resume(loop))
-check(brain.stored.ENERGY == 1000 + E.StorageBoost and brain.stored.MASS == 500 + E.StorageBoost, 'Loop tick refills both resources')
-check(E.Set(1, 'ENERGY', false) and brain.storageCalls[3] == 'Energy:' .. -E.StorageBoost, 'Disabling removes the boost')
+check(brain.stored.ENERGY == 1001000 and brain.stored.MASS == 1000500, 'Loop tick refills both resources')
+check(E.Set(1, 'ENERGY', false) and helpers('fdt0001') == 0 and brain:Max('ENERGY') == 1000, 'Disabling removes the helper and its storage')
+check(brain:Max('MASS') == 1000500, 'Disabling energy keeps the mass boost')
 brain.stored.ENERGY = 0
 assert(coroutine.resume(loop))
 check(brain.stored.ENERGY == 0, 'Disabled resources are no longer refilled')
 E.Set(1, 'MASS', false)
 assert(coroutine.resume(loop))
-check(coroutine.status(loop) == 'dead', 'Loop exits when nothing is enabled')
+check(coroutine.status(loop) == 'dead' and helpers('fdt0002') == 0, 'Loop exits when nothing is enabled')
 check(E.Set(1, 'ENERGY', true) and #E.forks == 2, 'A new loop starts after the old one ended')
-check(E.Set(1, 'MASS', false) and #brain.storageCalls == 5, 'Disabling an inactive resource changes nothing')
+check(E.Set(1, 'MASS', false) and helpers('fdt0002') == 0 and table.getn(world) == 3, 'Disabling an inactive resource changes nothing')
+
+-- Storage changes: helper storage adds to whatever the army's other storage is.
+brain = newBrain(); E = newEconomy({ brain })
+E.Set(1, 'ENERGY', true); E.Set(1, 'MASS', true)
+brain.base.ENERGY = 6000; brain.base.MASS = 900
+E.Tick()
+check(brain.stored.ENERGY == 1006000 and brain.stored.MASS == 1000900, 'Built or lost storage keeps the boost and is filled')
+check(helpers('fdt0001') == 1 and helpers('fdt0002') == 1, 'Storage changes spawn no extra helpers')
+world[1].destroyed = true
+E.Tick()
+check(helpers('fdt0001') == 1 and brain.stored.ENERGY == 1006000, 'A destroyed helper is replaced on the next tick')
+
+-- Defeated armies lose their helpers and stop the loop.
+brain = newBrain(); E = newEconomy({ brain })
+E.Set(1, 'ENERGY', true)
+brain.defeated = true
+check(E.Tick() == false and helpers('fdt0001') == 0 and E.Armies[1] == nil, 'Defeat removes helpers and toggles')
 
 -- Invalid requests.
 E = newEconomy({ newBrain() })
 check(not E.Set(2, 'ENERGY', true), 'Unknown armies are rejected')
-check(not E.Set(1, 'FUEL', true), 'Unknown resources are rejected')
+check(not E.Set(1, 'FUEL', true) and table.getn(world) == 0, 'Unknown resources are rejected')
 
 -- Callback: command source army, cheat gating and sync snapshot.
 local brains = { newBrain(), newBrain() }
@@ -83,18 +141,17 @@ E = newEconomy(brains, { army = 2 })
 E.HandleCallback({ Resource = 'MASS', Enabled = true })
 local snap = E.Sync.FireDragonDebug['2']
 check(snap and snap.Mass == true and snap.Energy == false and snap.Denied == nil, 'Callback toggles and syncs the sender army')
-check(brains[1].storageCalls[1] == nil and brains[2].storageCalls[1] ~= nil, 'Only the sender army is affected')
+check(table.getn(world) == 1 and world[1].army == 2, 'Only the sender army is affected')
 E = newEconomy({ newBrain() }, { army = 1, cheats = false })
 E.HandleCallback({ Resource = 'ENERGY', Enabled = true })
 snap = E.Sync.FireDragonDebug['1']
-check(snap.Denied == true and snap.Energy == false and #E.forks == 0, 'Without cheats the toggle is refused')
+check(snap.Denied == true and snap.Energy == false and #E.forks == 0 and table.getn(world) == 0, 'Without cheats the toggle is refused')
 E = newEconomy({ newBrain() }, { army = nil })
 E.HandleCallback({ Resource = 'ENERGY', Enabled = true })
 check(E.Sync.FireDragonDebug == nil, 'Observers are ignored')
 E = newEconomy({ newBrain() }, { army = 1 })
 E.HandleCallback('bad')
 check(E.Sync.FireDragonDebug == nil, 'Malformed data is ignored')
-
 -- Key bindings.
 local K = loadModule('src/lua/FireDragonDebugTools/Keys.lua')
 local b = K.Bindings({ ['Ctrl-A'] = 'select_all' })

@@ -1,6 +1,6 @@
 # FireDragon Debug Tools
 
-A small in-game debug panel for testing. Version 1 has two toggles:
+A small in-game debug panel for testing. It has two toggles:
 
 - **Infinite Energy**: your energy storage gets a +1,000,000 boost and is refilled every tick.
 - **Infinite Mass**: the same for mass.
@@ -14,6 +14,19 @@ A small in-game debug panel for testing. Version 1 has two toggles:
 The toggles always affect the army of the player who clicks them. Without cheats, the
 sim refuses the request, unticks the box and the panel shows *Refused: cheats are disabled*.
 Turning a toggle off removes the storage boost again.
+
+### How the boost works
+
+Enabling a toggle spawns an invisible, unselectable and invulnerable helper unit at your
+start position (`FDT0001` for energy, `FDT0002` for mass) whose blueprint has 1,000,000
+storage. The engine adds it to your max storage like any other storage unit, so building,
+upgrading or losing storages, generators or the ACU changes max storage normally without
+dropping the boost. A loop refills the resource every tick and respawns the helper if it
+is ever destroyed. Turning the toggle off destroys the helper.
+
+`brain:GiveStorage` is not used: the engine keeps a single bonus slot for it, shared by
+both resources, so it is recalculated away by storage changes and a mass boost wipes the
+energy boost (and vice versa).
 
 ### Changing the key
 
@@ -32,7 +45,8 @@ is only bound by default when it is not already used for something else.
 | Path | Purpose |
 |---|---|
 | `src/mod_info.lua` | Mod metadata (bump `version` per release) |
-| `src/lua/FireDragonDebugTools/Economy.lua` | Sim: per-army toggles, storage boost, refill loop, cheat gate |
+| `src/lua/FireDragonDebugTools/Economy.lua` | Sim: per-army toggles, storage helpers, refill loop, cheat gate |
+| `src/units/FDT0001`, `src/units/FDT0002` | Hidden energy / mass storage helper units |
 | `src/lua/FireDragonDebugTools/Keys.lua` | Key action, default key and game-start bindings |
 | `src/lua/FireDragonDebugTools/Panel.lua` | UI panel and sync handling |
 | `src/hook/lua/SimCallbacks.lua` | Routes `FireDragonDebugSetResource` to `Economy.lua` |
