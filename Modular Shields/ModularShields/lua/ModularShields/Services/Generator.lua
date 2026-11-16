@@ -74,26 +74,27 @@ local function MakeGenerator(Base)
         end,
         PublishModules = function(self)
             if not self.Loadout then return end
+            Jobs.UpdateProgress(self)
             local s, rows = self.Loadout, {}
             for _, id in ipairs(R.Registry.Order) do
                 local reason = R.Core.Eligible(s,id,R.Registry,R.Config,true)
                 local quote = s.Installed[id] and s.Installed[id].Quote or R.Core.Quote(s,id,R.Registry,R.Config)
                 rows[table.getn(rows)+1] = { Id = id, Name = R.Registry.Modules[id].UI.Name,
-                    Installed = s.Installed[id] ~= nil, Reason = reason and reason.Code,
-                    Detail = reason and (reason.Module or reason.Behavior), Quote = quote }
+                    Installed = s.Installed[id] ~= nil, Reason = reason and reason.Code or false,
+                    Detail = reason and (reason.Module or reason.Behavior) or false, Quote = quote }
             end
             local job = s.Queue[1]
             self.Sync.ModularShield = { Used = R.Core.Used(s,R.Registry), Slots = R.Config.Chassis[s.Chassis].Slots,
-                Rows = rows, Stats = self.ModuleStats, LastReason = self.ModuleReason,
+                Rows = rows, Stats = self.ModuleStats, LastReason = self.ModuleReason or false,
                 InstallPaused = self.InstallPaused or false, RepairPaused = self.RepairPaused or false,
                 Assistants=self.ModuleAssistantCount or 0, WorkRate=self.ModuleWorkRate or R.Config.InstallRate,
                 Upgrading=self.ModuleUpgrading or false, Barrier=self.BarrierReason,
                 ActualEnergy=self:GetConsumptionPerSecondEnergy(),
                 NativeAdjacency=self.EnergyMaintAdjMod or 1,
                 PowerProviders=self.ModulePowerProviders or 0,
-                Queue=table.deepcopy(s.Queue), RepairMass=self.ModuleRepairMass or 0,
+                Queue=table.deepcopy(s.Queue), QueueCount=table.getn(s.Queue), RepairMass=self.ModuleRepairMass or 0,
                 Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,
-                    Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } }
+                    Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } or false }
         end,
         RequestModuleInstall = function(self,id)
             if not self.Loadout or self.Dead then return end

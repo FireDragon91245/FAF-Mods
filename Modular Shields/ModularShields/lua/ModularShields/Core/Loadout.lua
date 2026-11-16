@@ -54,7 +54,9 @@ local function Request(s, id, r, config)
     s.NextJob = s.NextJob + 1
     local job = { JobId = s.NextJob, ModuleId = id, Quote = Quote(s,id,r,config),
         State = 'Queued', PaidWork = 0, MassSpent = 0, EnergySpent = 0, SlotReservation = r.Modules[id].Slots }
-    s.Queue[table.getn(s.Queue) + 1] = job; s.Revision = s.Revision + 1
+    -- Lua 5.0's table.remove caches the array length. A direct assignment after
+    -- completing/cancelling a job does not update it; table.insert does.
+    table.insert(s.Queue,job); s.Revision = s.Revision + 1
     return job
 end
 local function Invalidate(s, r)

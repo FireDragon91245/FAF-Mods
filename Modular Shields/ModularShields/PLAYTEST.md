@@ -5,6 +5,11 @@ registration/destruction, native module-button construction/handler dispatch and
 resource-paid installation progress. An engine frame export also shows the test
 enemy ground model rendering. Full interactive combat/playtesting is still pending.
 All built-in features are implemented and enabled.
+Version 7 also passed native engine checks for sustained engineer assistance and
+beams, live paid progress/native construction bar, completion/release, queue reuse
+and cancellation of dependent jobs with UI synchronization. These used an isolated
+diagnostic replay with a shortened quote; they do not establish multiplayer replay
+determinism. Temporary diagnostic hooks are excluded from the installed build.
 Record FAF release, map, other mods, replay path, logs and measured results here.
 AI compatibility means identical behavior against AI/player units and weapons;
 AI shield construction/planning is outside the requested scope.
@@ -18,12 +23,17 @@ AI shield construction/planning is outside the requested scope.
 3. Queue Power I-IV on T3; V must be refused. Removing I while II remains must name
    the dependent. Remove descending levels; verify slots, clamped HP and upkeep.
 4. Install with zero, one and several guarding engineers. Engineers contributing to
-   module work show paused native work; they resume afterward. Measure time and total
+   module work show continuous build beams and remain counted throughout the job;
+   native repair is paused and resumes afterward. Measure time and total
    mass/energy: assistance accelerates spending without changing the quote. Check
    distant, busy, already paused, reassigned and manually unpaused engineers.
+   Check that guarding engineers retain their orders after each completion.
 5. Pause/resume, cancel/requeue, and stall mass/energy at partial progress. Existing
    shields/modules must keep working subject to normal power rules. No free effects,
    double work or refunds. Confirm maintenance changes in the economy display.
+   Watch the live percentage and native construction bar with the side panel open
+   and closed. Cancel a queue with dependent jobs, then complete a new job: no old
+   percentage or cancel-button label should remain. Switch tabs during the job.
 6. Test repair on differently priced structures, foundations, full-health targets,
    other-army allies, overlapping auras and empty mass storage. Verify the shared HP
    budget, mass spent per delivered HP and target/range/death cleanup.

@@ -6,7 +6,7 @@ player-controlled attackers. The mod does not make an AI build, equip or plan sh
 
 All built-in module families are implemented and enabled. This is ready for FAF
 playtesting; the automated checks do not certify engine behavior, balance or multiplayer.
-No game installation or active mod list has been changed.
+The packaged folder can be copied into the FAF mod directory below.
 
 ## Install
 
@@ -37,6 +37,9 @@ gives no refund and is rejected while an installed dependent still needs it.
 The panel reports the dependent ID. Use the queue tab to cancel any pending job.
 Module fitting/removal uses the native buttons in the side panel; the bottom
 command bar provides the chassis upgrade. Locked module buttons show their reason.
+Paid progress updates live in the panel and the generator's native construction
+bar. Pausing retains progress; completion/cancellation clears the finished job and
+queue buttons. The native bar remains available with the module panel closed.
 
 T3 has four slots; T4 has eight. Power, Range, Regen and Repair each have five
 incremental levels. Every completed level occupies its own slot, retains its own
@@ -47,8 +50,10 @@ Installations spend normal mass and energy through native economy events. The
 scripted work backend samples actual fulfillment and counts only paid work.
 Engineers assigned to guard/repair the host, in normal build range, contribute their
 build rates. While contributing, their native work is paused; the installation pays
-for their work through the host's event. This visible pause prevents simultaneously
-repairing the shield and fitting equipment. Unassigned, distant, busy, previously
+for their work through the host's event. Continuous construction beams indicate
+module work, and the panel reports contributing engineers and their combined rate.
+The native pause prevents simultaneously repairing the shield and fitting equipment.
+Active guard/repair orders remain intact throughout the installation. Unassigned, distant, busy, previously
 paused and other-army engineers do not contribute. Reassign or manually unpause a
 contributing engineer to withdraw it. Completion, cancellation, host death, transfer
 and installation pause release assistants without rewriting their command queues.
@@ -179,6 +184,7 @@ parses every Lua/blueprint source. The engine mocks cover once-only interception
 paid work and starvation, assistant release, body bounce/breakup, deferred cargo,
 upgrade transfer, ground behavior, neighbor rules and legendary activation.
 UI checks also exercise native-control layout, persistent buttons and the secured
-simulation callback for fitting, removal, cancellation and pausing.
+simulation callback for fitting, removal, cancellation and pausing, including FAF's
+recursive unit-data merge and cleanup of completed/cancelled queue controls.
 
 Follow PLAYTEST.md in FAF before making gameplay, multiplayer or performance claims.

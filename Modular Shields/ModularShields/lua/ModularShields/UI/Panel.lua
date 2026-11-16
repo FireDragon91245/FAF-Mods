@@ -14,6 +14,9 @@ end
 
 local function Show(control,visible)
     if visible then control:Show() else control:Hide() end
+    if control.label then
+        if visible then control.label:Show() else control.label:Hide() end
+    end
 end
 
 local function ShowPage(v)
@@ -156,11 +159,16 @@ local function Update()
         SetText(controls.Detail,detail)
     end
     for index,controls in ipairs(v.QueueRows) do
-        local pending=(state.Queue or {})[index]
+        local pending=index<=(state.QueueCount or table.getn(state.Queue or {})) and (state.Queue or {})[index] or nil
         controls.Data=pending
         if pending then
+            controls.Button:Enable()
             SetText(controls.Button.label,string.format('Cancel %s | %.0f%% (%s)',pending.ModuleId,100*pending.PaidWork/pending.Quote.Work,pending.State))
             SetText(controls.Detail,string.format('Paid %.0f M / %.0f E of %.0f M / %.0f E',pending.MassSpent,pending.EnergySpent,pending.Quote.Mass,pending.Quote.Energy))
+        else
+            controls.Button:Disable()
+            SetText(controls.Button.label,'')
+            SetText(controls.Detail,'')
         end
     end
     ShowPage(v)

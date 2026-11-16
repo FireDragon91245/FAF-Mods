@@ -27,6 +27,7 @@ function ModBlueprints(all)
             bp.General.UpgradesFrom, bp.General.UpgradesFromBase, bp.General.UpgradesTo = 'none','none',nil
             bp.Economy.BuildableCategory = nil
             bp.Economy.BuildRate = R.Config.InstallRate
+            bp.General.ConstructionBar = true
             bp.General.CommandCaps = bp.General.CommandCaps or {}
             bp.General.CommandCaps.RULEUCC_Pause = true
             bp.General.CommandCaps.RULEUCC_Stop = true
