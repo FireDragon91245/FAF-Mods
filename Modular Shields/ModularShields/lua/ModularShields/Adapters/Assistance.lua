@@ -1,8 +1,7 @@
--- Scripted work backend. Claimed engineers pause native work to avoid double use.
+-- The host pays for module work. Guarding engineers never run native repair in parallel.
 local function Alive(u) return u and not u.Dead and not IsDestroyed(u) end
 local function Assigned(u,host)
-    -- Pausing native construction can clear its focus/guard pointer. The active
-    -- order remains authoritative, including when the focus was the dome.
+    -- The active order remains authoritative, including when focus is the dome.
     local queue=u:GetCommandQueue() or {}
     local command=queue[1]
     if not command then return false end
@@ -30,8 +29,9 @@ local function InRange(u,host)
     return (a[1]-b[1])*(a[1]-b[1])+(a[3]-b[3])*(a[3]-b[3])<=r*r
 end
 local function StartEffects(u,host)
-    -- Own these separately: SetPaused stops the engineer's native build effects.
-    -- Native construction stays paused so there is only one economy backend.
+    if u.OnPrepareArmToBuild then u:OnPrepareArmToBuild() end
+    if u.BuildingOpenAnimManip then u.BuildingOpenAnimManip:SetRate(u.Blueprint.Display.AnimationBuildRate or 1) end
+    if u.BuildManipulatorSetEnabled then u:BuildManipulatorSetEnabled(true) end
     if not AttachBeamEntityToEntity then return end
     u.ModularAssistBeams={}
     local bones=u.BuildEffectBones or {0}
@@ -41,63 +41,100 @@ local function StartEffects(u,host)
         u.Trash:Add(beam)
     end
 end
+local function StopEffects(u)
+    for _,beam in ipairs(u.ModularAssistBeams or {}) do beam:Destroy() end
+    u.ModularAssistBeams=nil
+    if Alive(u) then
+        if u.BuildingOpenAnimManip then u.BuildingOpenAnimManip:SetRate(-(u.Blueprint.Display.AnimationBuildRate or 1)) end
+        if u.BuildManipulatorSetEnabled then u:BuildManipulatorSetEnabled(false) end
+    end
+    u.ModularAssistActive=false
+end
+local function Claim(u,host)
+    local native={Rate=u:GetBuildRate(),Set=u.SetBuildRate,Update=u.UpdateConsumptionValues,
+        OwnSet=rawget(u,'SetBuildRate'),OwnUpdate=rawget(u,'UpdateConsumptionValues'),
+        Prepare=u.OnPrepareArmToBuild,Tracking=u.OnStopBuilderTracking,
+        OwnPrepare=rawget(u,'OnPrepareArmToBuild'),OwnTracking=rawget(u,'OnStopBuilderTracking'),
+        OwnEffects=rawget(u,'StartBuildingEffects')}
+    u.ModularNativeWork=native;u.ModularAssistOwner=host
+    host.ModuleAssistants[u.EntityId]=u
+    -- Keep buffs effective while holding the native engine at zero build rate.
+    u.SetBuildRate=function(unit,rate) native.Rate=rate;native.Set(unit,0) end
+    -- Native guard/repair callbacks must not create idle repair beams or retract
+    -- the arm while the scripted module job is using it.
+    if u.StopBuildingEffects then u:StopBuildingEffects(u:GetFocusUnit()) end
+    u.StartBuildingEffects=function() end
+    u.OnPrepareArmToBuild=function(unit)
+        if unit.ModularAssistActive and native.Prepare then native.Prepare(unit) end
+    end
+    u.OnStopBuilderTracking=function(unit)
+        if not unit.ModularAssistActive and native.Tracking then native.Tracking(unit) end
+    end
+    u.UpdateConsumptionValues=function(unit)
+        local active=unit.ActiveConsumption
+        unit.ActiveConsumption=false
+        native.Update(unit)
+        unit.ActiveConsumption=active
+    end
+    native.Set(u,0)
+    u:UpdateConsumptionValues()
+end
 local function Release(host,id)
     local u=host.ModuleAssistants[id]
     if u and u.ModularAssistOwner==host then
-        u.ModularAssistOwner=nil
-        u.ModularAssistRate=nil
-        for _,beam in ipairs(u.ModularAssistBeams or {}) do beam:Destroy() end
-        u.ModularAssistBeams=nil
-        if Alive(u) then u:SetPaused(false) end
+        StopEffects(u)
+        local native=u.ModularNativeWork
+        u.SetBuildRate=native.OwnSet;u.UpdateConsumptionValues=native.OwnUpdate
+        u.OnPrepareArmToBuild=native.OwnPrepare;u.OnStopBuilderTracking=native.OwnTracking
+        u.StartBuildingEffects=native.OwnEffects
+        u.ModularNativeWork=nil;u.ModularAssistOwner=nil
+        if Alive(u) then native.Set(u,native.Rate);u:UpdateConsumptionValues() end
     end
     host.ModuleAssistants[id]=nil
 end
+local function Stop(host)
+    for _,u in pairs(host.ModuleAssistants or {}) do StopEffects(u) end
+    host.ModuleAssistantCount=0;host.ModuleWorkRate=nil
+end
 local function ReleaseAll(host)
     host.ModuleAssistants=host.ModuleAssistants or {}
-    local ids={};for id in pairs(host.ModuleAssistants) do ids[table.getn(ids)+1]=id end;table.sort(ids)
+    local ids={};for id in pairs(host.ModuleAssistants) do table.insert(ids,id) end;table.sort(ids)
     for _,id in ipairs(ids) do Release(host,id) end
     host.ModuleAssistantCount=0;host.ModuleWorkRate=nil
-    host.ModuleAssistExcluded={}
 end
 local function Rate(host,config)
     host.ModuleAssistants=host.ModuleAssistants or {}
-    host.ModuleAssistExcluded=host.ModuleAssistExcluded or {}
+    if host.ModuleUpgrading then ReleaseAll(host);return config.InstallRate end
+    local job=host.Loadout and host.Loadout.Queue[1]
+    local working=job and not host.InstallPaused
     local candidates={}
     for _,u in ipairs(host:GetGuards() or {}) do candidates[u.EntityId]=u end
     for id,u in pairs(host.Repairers or {}) do candidates[id]=u end
     for id,u in pairs(host.ModuleAssistants) do candidates[id]=u end
-    local ids={};for id in pairs(candidates) do ids[table.getn(ids)+1]=id end;table.sort(ids)
+    local ids={};for id in pairs(candidates) do table.insert(ids,id) end;table.sort(ids)
     local rate,count=config.InstallRate,0
     local assistants={}
     for _,id in ipairs(ids) do
         local u=candidates[id]
-        local alive=Alive(u)
         local owned=u.ModularAssistOwner==host
-        if owned and alive and not u:IsPaused() then
-            Release(host,id);host.ModuleAssistExcluded[id]=true;owned=false
-        end
-        local valid=alive and u.Army==host.Army and u:GetFractionComplete()==1
+        local valid=Alive(u) and u.Army==host.Army and u:GetFractionComplete()==1
             and u.Blueprint.CategoriesHash.ENGINEER and Assigned(u,host) and InRange(u,host)
-            and (not u.ModularAssistOwner or owned) and not host.ModuleAssistExcluded[id]
-        if valid and (owned or not u:IsPaused()) then
-            if not owned then
-                u.ModularAssistRate=u:GetBuildRate()
-                u.ModularAssistOwner=host;host.ModuleAssistants[id]=u
-                u:SetPaused(true)
-                StartEffects(u,host)
-            else
-                local current=u:GetBuildRate()
-                if current>0 then u.ModularAssistRate=current end
-            end
-            rate=rate+u.ModularAssistRate;count=count+1
-            assistants[table.getn(assistants)+1]=id
+            and (not u.ModularAssistOwner or owned)
+        if valid then
+            if not owned then Claim(u,host) end
+            if working and not u:IsPaused() then
+                if not u.ModularAssistActive then
+                    u.ModularAssistActive=true;StartEffects(u,host)
+                end
+                rate=rate+u.ModularNativeWork.Rate;count=count+1
+                table.insert(assistants,id)
+            else StopEffects(u) end
         elseif owned then Release(host,id) end
     end
     host.ModuleAssistantCount=count
     host.ModuleWorkRate=math.min(config.InstallMaxRate,rate)
-    local job=host.Loadout and host.Loadout.Queue[1]
     if job then job.AssistantIds=assistants end
     return host.ModuleWorkRate
 end
-Export={Rate=Rate,ReleaseAll=ReleaseAll}
+Export={Rate=Rate,Stop=Stop,ReleaseAll=ReleaseAll}
 return Export

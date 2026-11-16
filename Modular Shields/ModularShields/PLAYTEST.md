@@ -24,9 +24,10 @@ AI shield construction/planning is outside the requested scope.
    the dependent. Remove descending levels; verify slots, clamped HP and upkeep.
 4. Install with zero, one and several guarding engineers. Engineers contributing to
    module work show continuous build beams and remain counted throughout the job;
-   native repair is paused and resumes afterward. Measure time and total
+   their build arms are extended without a disabled icon. Idle guards must not repair
+   the shield or draw construction resources. Measure time and total
    mass/energy: assistance accelerates spending without changing the quote. Check
-   distant, busy, already paused, reassigned and manually unpaused engineers.
+   distant, busy, already paused, reassigned and manually paused engineers.
    Check that guarding engineers retain their orders after each completion.
 5. Pause/resume, cancel/requeue, and stall mass/energy at partial progress. Existing
    shields/modules must keep working subject to normal power rules. No free effects,

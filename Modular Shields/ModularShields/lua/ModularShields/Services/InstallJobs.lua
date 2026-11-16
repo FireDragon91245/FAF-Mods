@@ -16,7 +16,7 @@ local function Stop(host)
     host.ModuleEpoch=(host.ModuleEpoch or 0)+1
     if host.ModuleEvent then RemoveEconomyEvent(host,host.ModuleEvent);host.ModuleEvent=nil end
     if host.ModuleThread then KillThread(host.ModuleThread);host.ModuleThread=nil end
-    Assist.ReleaseAll(host)
+    Assist.Stop(host)
     UpdateProgress(host)
 end
 local function Start(host,R)
@@ -60,12 +60,12 @@ local function Start(host,R)
                 end
                 local failure=core.Complete(s,job,R.Registry,R.Config)
                 if failure then core.RequestCancel(s,job.JobId,R.Registry);host.ModuleReason=failure.Code end
-                Assist.ReleaseAll(host)
+                Assist.Stop(host)
                 host:ReconcileModules()
                 PublishProgress(host,true)
             end
         end
-        Assist.ReleaseAll(host)
+        Assist.Stop(host)
         host.ModuleThread=nil;PublishProgress(host,true)
     end)
 end

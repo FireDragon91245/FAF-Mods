@@ -1,5 +1,6 @@
 local root = '/mods/ModularShields/lua/ModularShields/'
 local R = import(root .. 'Runtime.lua').Export
+local Assist = import(root .. 'Adapters/Assistance.lua').Export
 local Jobs = import(root .. 'Services/InstallJobs.lua').Export
 local Shield = import(root .. 'Adapters/Shield.lua').Export
 local Adjacency = import(root .. 'Adapters/Adjacency.lua').Export
@@ -24,6 +25,14 @@ local function MakeGenerator(Base)
             if inherited then Transfer.Restore(self,inherited) end
             Combat.Register(self)
             Jobs.Start(self,R)
+            self:ForkThread(function()
+                while not self.Dead do
+                    local before=self.ModuleAssistantCount
+                    Assist.Rate(self,R.Config)
+                    if before~=self.ModuleAssistantCount then self:PublishModules() end
+                    WaitTicks(1)
+                end
+            end)
             self:ForkThread(function()
                 WaitTicks(math.mod(self.EntityId, 10) + 1)
                 while not self.Dead do
@@ -141,7 +150,7 @@ local function MakeGenerator(Base)
         end,
         OnStartBuild=function(self,built,order)
             if order=='Upgrade' and built.Blueprint.ModularShield then
-                Jobs.Stop(self);self.ModuleUpgrading=true
+                Jobs.Stop(self);self.ModuleUpgrading=true;Assist.ReleaseAll(self)
                 self.BarrierActive=false;self.BarrierRecords=nil
             end
             local result=Base.OnStartBuild(self,built,order)
@@ -165,19 +174,19 @@ local function MakeGenerator(Base)
             end,
         },
         OnGiven = function(self,newUnit)
-            Jobs.Stop(self)
+            Jobs.Stop(self);Assist.ReleaseAll(self)
             if newUnit.Loadout then Transfer.Restore(newUnit,self.TransferSnapshot or Transfer.Snapshot(self,false)) end
             Base.OnGiven(self,newUnit)
         end,
         OnDestroy = function(self)
-            Jobs.Stop(self)
+            Jobs.Stop(self);Assist.ReleaseAll(self)
             Combat.Unregister(self)
             self.BarrierActive=false;self.BarrierRecords=nil
             if self.IsBeingTransferred then self.TransferSnapshot=Transfer.Snapshot(self,false) end
             Base.OnDestroy(self)
         end,
         OnKilled = function(self,instigator,damageType,overkillRatio)
-            Jobs.Stop(self)
+            Jobs.Stop(self);Assist.ReleaseAll(self)
             Combat.Unregister(self)
             self.BarrierActive=false;self.BarrierRecords=nil
             Base.OnKilled(self,instigator,damageType,overkillRatio)

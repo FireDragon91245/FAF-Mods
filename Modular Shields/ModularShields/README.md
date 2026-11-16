@@ -49,14 +49,15 @@ Power I-IV fills T3; Power V requires T4. Nothing grants free capacity healing.
 Installations spend normal mass and energy through native economy events. The
 scripted work backend samples actual fulfillment and counts only paid work.
 Engineers assigned to guard/repair the host, in normal build range, contribute their
-build rates. While contributing, their native work is paused; the installation pays
-for their work through the host's event. Continuous construction beams indicate
-module work, and the panel reports contributing engineers and their combined rate.
-The native pause prevents simultaneously repairing the shield and fitting equipment.
-Active guard/repair orders remain intact throughout the installation. Unassigned, distant, busy, previously
-paused and other-army engineers do not contribute. Reassign or manually unpause a
-contributing engineer to withdraw it. Completion, cancellation, host death, transfer
-and installation pause release assistants without rewriting their command queues.
+build rates. The host pays for their work through its economy event. Engineers
+extend their build arms and show continuous beams during module installation;
+they are not paused and do not display a disabled icon. The panel reports their
+count and combined rate. Idle or paused installations leave guards waiting, with
+no native shield repair, beams or construction resource draw. Normal shield
+regeneration and generator upkeep continue. Unassigned, distant, busy, player-paused
+and other-army engineers do not contribute. Reassigning restores normal construction
+and the latest buffed build rate. Guard orders remain intact between module jobs;
+native assistance is restored for chassis upgrading, host destruction or transfer.
 
 Assistance increases speed and resource demand, keeping the total quote fixed.
 At resource starvation engineers are reconciled every tick. Partial paid progress
