@@ -8,7 +8,7 @@ local Descriptions={
     atomized={'Contains intercepted nuclear explosions.','The shield absorbs the blast damage.'},
     ballistic={'Intercepts hostile missiles and rockets,','including supported shield-bypassing weapons.'},
     impenetrable={'Blocks hostile ground/air units and projectiles.','Unit impacts cost shield HP by unit weight.'},
-    regen={'Works continuously, including under fire.','Vanilla and power bonuses wait for no damage.'},
+    regen={'Adds this HP/s under fire and at peace.','At peace: base + modules + neighbor regen.'},
 }
 local Reasons={NoFreeSlot='All module slots are reserved.',WrongChassis='Requires a T4 generator.',
     MissingModule='Requires module',MissingAdjacentPower='Requires an edge-adjacent T2+ generator.',
@@ -66,7 +66,7 @@ local function Tooltip(entry,state)
     local suffix=row.Installed and ' on removal' or ''
     if d.ShieldMaxHP and d.ShieldMaxHP~=0 then add(string.format('%+.0f maximum shield HP',sign*d.ShieldMaxHP)..suffix,Colors.HP) end
     if d.ShieldRegen and d.ShieldRegen~=0 then add(string.format('%+.0f shield HP / second',sign*d.ShieldRegen)..suffix,Colors.Regen) end
-    if d.ShieldSize and d.ShieldSize~=0 then add(string.format('%+.1f shield radius',sign*d.ShieldSize/2)..suffix,Colors.Range) end
+    if d.ShieldSize and d.ShieldSize~=0 then add(string.format('%+.0f shield radius',sign*d.ShieldSize/2)..suffix,Colors.Range) end
     if d.RepairBudget and d.RepairBudget~=0 then add(string.format('%+.0f structure HP / second',sign*d.RepairBudget)..suffix,Colors.Regen) end
     for _,text in ipairs(Descriptions[row.Family] or {}) do add(text,row.Family=='regen' and Colors.Regen or Colors.Special) end
     if row.Id=='impenetrable' then

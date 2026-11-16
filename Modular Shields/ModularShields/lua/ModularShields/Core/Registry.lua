@@ -10,6 +10,7 @@ local function Build(config, packages, load)
     assert(config.InstallMaxRate>=config.InstallRate,'Maximum work rate below host rate')
     positive(config.InstallSliceSeconds,'work slice')
     positive(config.RepairFactor,'repair mass factor')
+    for _,step in pairs(config.NumberSteps) do positive(step,'number rounding step') end
     for _,chassis in pairs(config.Chassis) do positive(chassis.Slots,'chassis slots');assert(math.mod(chassis.Slots,1)==0,'Nonintegral slot capacity') end
     for stat,cap in pairs(config.Caps) do positive(cap,stat..' cap') end
     local r = { Modules = {}, Order = {}, ActivationOrder={}, Providers = {}, Rules = {} }
@@ -27,11 +28,16 @@ local function Build(config, packages, load)
             assert(table.getn(d.Chassis) > 0, 'Missing chassis')
             for _, c in ipairs(d.Chassis) do assert(config.Chassis[c], 'Unknown chassis ' .. c) end
             positive(d.CostFraction or config.LevelCost[d.CostLevel], d.Id .. ' cost', true)
+            positive(d.EnergyCostFraction or (d.CostLevel and config.LevelEnergyCost[d.CostLevel]) or d.CostFraction,d.Id..' energy cost',true)
             positive(d.Seconds or config.LevelSeconds[d.SecondsLevel], d.Id .. ' time')
-            positive(d.UpkeepFraction, d.Id .. ' upkeep', true)
+            positive(d.UpkeepFraction or config.LevelUpkeep[d.UpkeepLevel], d.Id .. ' upkeep', true)
             for _, e in ipairs(d.Effects) do
                 assert(config.Caps[e.Stat] and (e.Op == 'Add' or e.Op == 'AddBaseFraction'), 'Invalid effect ' .. d.Id)
                 positive(e.Value, d.Id .. ' effect', true)
+                for chassis,scale in pairs(e.ChassisScale or {}) do
+                    assert(config.Chassis[chassis],'Unknown effect chassis '..chassis)
+                    positive(scale,d.Id..' chassis effect scale')
+                end
             end
             r.Modules[d.Id] = d; r.Order[table.getn(r.Order) + 1] = d.Id
         end

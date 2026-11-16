@@ -62,6 +62,12 @@ function ModBlueprints(all)
                 bp.Defense.Shield.ShieldSize = original.Defense.Shield.ShieldSize * 1.25
                 bp.Defense.Shield.ShieldRegenRate = original.Defense.Shield.ShieldRegenRate * 1.5
             end
+            -- These modular copies use whole radius units and clean base HP/s.
+            -- Stock faction blueprints remain untouched.
+            local steps=R.Config.NumberSteps
+            local shield=bp.Defense.Shield
+            shield.ShieldRegenRate=math.floor(shield.ShieldRegenRate/steps.BaseRegen+.5)*steps.BaseRegen
+            shield.ShieldSize=2*math.floor(shield.ShieldSize/(2*steps.BaseRadius)+.5)*steps.BaseRadius
             bp.Display.Abilities = { 'Cumulative module slots: ' .. R.Config.Chassis['t'..tier].Slots,
                 'Select to open module panel', 'Engineer assisted module installation' }
             all.Unit[id] = bp

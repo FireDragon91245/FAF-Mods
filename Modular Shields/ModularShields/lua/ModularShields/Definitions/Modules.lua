@@ -1,7 +1,11 @@
 local definitions = {}
+-- Each number is the additional benefit of that particular installed level.
+-- HP and shield regeneration double on a T4; range and building repair do not.
 local families = {
-    { 'power', 'ShieldMaxHP', .25 }, { 'range', 'ShieldSize', .08 },
-    { 'regen', 'ShieldRegen', .30 }, { 'repair', 'RepairBudget', 30 },
+    { 'power', 'ShieldMaxHP', {1000,2500,5000,10000,20000}, 1, true },
+    { 'range', 'ShieldSize', {1,2,3,5,10}, 2 },
+    { 'regen', 'ShieldRegen', {10,25,50,100,200}, 1, true },
+    { 'repair', 'RepairBudget', {10,20,40,80,160}, 1 },
 }
 for _, family in ipairs(families) do
     for level = 1, 5 do
@@ -10,8 +14,9 @@ for _, family in ipairs(families) do
             Id = id, Family = family[1], Level = level, Slots = 1, MaxInstances = 1,
             Chassis = { 't3', 't4' },
             Requires = { AllModules = level > 1 and { family[1] .. '_' .. (level - 1) } or {} },
-            Effects = {{ Stat = family[2], Op = family[1] == 'repair' and 'Add' or 'AddBaseFraction', Value = family[3] }},
-            CostLevel = level, SecondsLevel = level, UpkeepFraction = .1,
+            Effects = {{ Stat = family[2], Op = 'Add', Value = family[3][level]*family[4],
+                ChassisScale=family[5] and {t3=1,t4=2} or nil }},
+            CostLevel = level, SecondsLevel = level, UpkeepLevel = level,
             Behavior = family[1] == 'repair' and 'repair' or nil,
             AI = { Priority = 50 - level }, UI = { Name = family[1] .. ' ' .. level },
         }

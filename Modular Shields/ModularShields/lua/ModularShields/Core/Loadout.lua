@@ -30,10 +30,14 @@ local function Quote(s, id, r, config)
     local d, b = r.Modules[id], s.Base
     if not d then return nil end
     local fraction = d.CostFraction or config.LevelCost[d.CostLevel]
-    return { Mass = b.Mass * fraction, Energy = b.Energy * fraction, Slots=d.Slots,Chassis=s.Chassis,
+    local energyFraction=d.EnergyCostFraction or (d.CostLevel and config.LevelEnergyCost[d.CostLevel]) or fraction
+    local upkeep=d.UpkeepFraction or config.LevelUpkeep[d.UpkeepLevel]
+    local function rounded(value,step) return math.floor(value/step+.5)*step end
+    local steps=config.NumberSteps
+    return { Mass = rounded(b.Mass*fraction,steps.Mass), Energy = rounded(b.Energy*energyFraction,steps.Energy), Slots=d.Slots,Chassis=s.Chassis,
         Seconds=d.Seconds or config.LevelSeconds[d.SecondsLevel],
         Work = config.InstallRate * (d.Seconds or config.LevelSeconds[d.SecondsLevel]),
-        Upkeep = b.Upkeep * d.UpkeepFraction, Version = 1 }
+        Upkeep = rounded(b.Upkeep*upkeep,steps.Upkeep), Version = 2 }
 end
 local function Eligible(s, id, r, config, includeQueue)
     local d = r.Modules[id]

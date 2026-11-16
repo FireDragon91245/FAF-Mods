@@ -180,14 +180,14 @@ local function Update()
     local regenLabels={'non-damage vanilla regen','module regen (under fire too)','neighbor power regen'}
     for n=1,3 do
         Text(v.HPSources[n],string.format('%+.0f from %s',hp[n],hpLabels[n]),C.HP)
-        Text(v.RegenSources[n],string.format('%+.1f HP/s from %s',regen[n],regenLabels[n]),C.Regen)
+        Text(v.RegenSources[n],string.format('%+.0f HP/s from %s',regen[n],regenLabels[n]),C.Regen)
     end
     local neighbors=state.Neighbors or {}
-    Text(v.Neighbors,string.format('Neighbors: %.0f E/s power | %d energy storage | %d mass storage | Slots: %d base + %d mass | Upkeep x%.2f',neighbors.Production or 0,neighbors.EnergyStorage or 0,neighbors.MassStorage or 0,state.BaseSlots or state.Slots,state.BonusSlots or 0,state.NativeAdjacency or 1),C.Cost)
+    Text(v.Neighbors,string.format('Neighbors: %.0f E/s power | %d energy storage | %d mass storage | Slots: %d base + %d mass | Upkeep %.0f%%',neighbors.Production or 0,neighbors.EnergyStorage or 0,neighbors.MassStorage or 0,state.BaseSlots or state.Slots,state.BonusSlots or 0,100*(state.NativeAdjacency or 1)),C.Cost)
     Text(v.Pause,state.InstallPaused and '>' or 'II',state.InstallPaused and C.Cost or C.Text)
     Text(v.Repair,'+',state.RepairPaused and C.Muted or C.Regen)
     local barrier=state.Barrier=='Active' and '  |  Barrier active' or (state.Barrier=='WarmingUp' and '  |  Barrier warming up' or '')
-    Text(v.Info,state.Used>state.Slots and 'Over capacity: excess modules are dormant. Restore mass storage or remove modules.' or (state.LastReason and Model.Reason(state.LastReason) or string.format('Radius %.1f  |  Assisting %d  |  %.1f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier),(state.LastReason or state.Used>state.Slots) and C.Damage or C.Muted)
+    Text(v.Info,state.Used>state.Slots and 'Over capacity: excess modules are dormant. Restore mass storage or remove modules.' or (state.LastReason and Model.Reason(state.LastReason) or string.format('Radius %.0f  |  Assisting %d  |  %.0f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier),(state.LastReason or state.Used>state.Slots) and C.Damage or C.Muted)
     local faction=string.lower(state.Faction or 'UEF')
     if faction~='uef' and faction~='aeon' and faction~='cybran' and faction~='seraphim' then faction='uef' end
     local members,available=Model.Lists(state)

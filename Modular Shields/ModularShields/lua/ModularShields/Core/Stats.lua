@@ -5,7 +5,8 @@ local function Calculate(s, registry, config, neighbors)
         ModuleSlots=s.Chassis and config.Chassis[s.Chassis].Slots or 0,
         BaseUpkeep = b.Upkeep, ModuleUpkeep = 0, Capabilities = {}, Dormant = {} }
     local function effect(e)
-        out[e.Stat] = out[e.Stat] + (e.Op == 'AddBaseFraction' and (b[e.Stat] or 1) * e.Value or e.Value)
+        local value=e.Value*(e.ChassisScale and e.ChassisScale[s.Chassis] or 1)
+        out[e.Stat] = out[e.Stat] + (e.Op == 'AddBaseFraction' and (b[e.Stat] or 1) * value or value)
     end
     local function clamp()
         for stat,cap in pairs(config.Caps) do
