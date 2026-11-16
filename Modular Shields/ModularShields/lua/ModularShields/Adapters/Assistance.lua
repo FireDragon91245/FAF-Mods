@@ -45,10 +45,20 @@ local function StopEffects(u)
     for _,beam in ipairs(u.ModularAssistBeams or {}) do beam:Destroy() end
     u.ModularAssistBeams=nil
     if Alive(u) then
+        if u.ModularAssistProgress then u:SetWorkProgress(0) end
         if u.BuildingOpenAnimManip then u.BuildingOpenAnimManip:SetRate(-(u.Blueprint.Display.AnimationBuildRate or 1)) end
         if u.BuildManipulatorSetEnabled then u:BuildManipulatorSetEnabled(false) end
     end
     u.ModularAssistActive=false
+    u.ModularAssistProgress=nil
+end
+local function UpdateProgress(host,progress)
+    for _,u in pairs(host.ModuleAssistants or {}) do
+        if Alive(u) and u.ModularAssistActive then
+            u:SetWorkProgress(progress)
+            u.ModularAssistProgress=true
+        end
+    end
 end
 local function Claim(u,host)
     local native={Rate=u:GetBuildRate(),Set=u.SetBuildRate,Update=u.UpdateConsumptionValues,
@@ -134,7 +144,9 @@ local function Rate(host,config)
     host.ModuleAssistantCount=count
     host.ModuleWorkRate=math.min(config.InstallMaxRate,rate)
     if job then job.AssistantIds=assistants end
+    -- Also initialize engineers joining an installation already in progress.
+    if working then UpdateProgress(host,math.min(1,job.PaidWork/job.Quote.Work)) end
     return host.ModuleWorkRate
 end
-Export={Rate=Rate,Stop=Stop,ReleaseAll=ReleaseAll}
+Export={Rate=Rate,Stop=Stop,ReleaseAll=ReleaseAll,UpdateProgress=UpdateProgress}
 return Export

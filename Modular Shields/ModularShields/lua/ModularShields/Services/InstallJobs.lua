@@ -2,7 +2,9 @@ local Assist=import('/mods/ModularShields/lua/ModularShields/Adapters/Assistance
 local function UpdateProgress(host)
     if host.ModuleUpgrading then return end
     local job=host.Loadout and host.Loadout.Queue[1]
-    host:SetWorkProgress(job and math.min(1,job.PaidWork/job.Quote.Work) or 0)
+    local progress=job and math.min(1,job.PaidWork/job.Quote.Work) or 0
+    host:SetWorkProgress(progress)
+    Assist.UpdateProgress(host,progress)
 end
 local function PublishProgress(host,force)
     UpdateProgress(host)

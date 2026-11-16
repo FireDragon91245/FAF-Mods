@@ -29,6 +29,9 @@ AI shield construction/planning is outside the requested scope.
    mass/energy: assistance accelerates spending without changing the quote. Check
    distant, busy, already paused, reassigned and manually paused engineers.
    Check that guarding engineers retain their orders after each completion.
+   Assisting builders must show the same native progress bar as the generator.
+   Add a builder midway, stall resources, then cancel or reassign it: its bar
+   should start at current paid progress, stop during stalls and clear on leaving.
 5. Pause/resume, cancel/requeue, and stall mass/energy at partial progress. Existing
    shields/modules must keep working subject to normal power rules. No free effects,
    double work or refunds. Confirm maintenance changes in the economy display.

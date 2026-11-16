@@ -38,7 +38,9 @@ The panel reports the dependent ID. Use the queue tab to cancel any pending job.
 Module fitting/removal uses the native buttons in the side panel; the bottom
 command bar provides the chassis upgrade. Locked module buttons show their reason.
 Paid progress updates live in the panel and the generator's native construction
-bar. Pausing retains progress; completion/cancellation clears the finished job and
+bar. Contributing engineers show the same paid progress in their native bars,
+including when joining midway. Their bars clear when assistance ends.
+Pausing retains generator progress; completion/cancellation clears the finished job and
 queue buttons. The native bar remains available with the module panel closed.
 
 T3 has four slots; T4 has eight. Power, Range, Regen and Repair each have five
