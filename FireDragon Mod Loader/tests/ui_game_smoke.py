@@ -55,7 +55,7 @@ assert(not window.FDVisual:IsHidden() and not checkbox.Check.FDVisual:IsHidden()
 window:Destroy()
 local prefs=import('/lua/user/prefs.lua')
 local key='FireDragon_UI_RuntimeSmoke_Window'
-local original=prefs.GetFromCurrentProfile(key)
+local original=prefs.GetFromCurrentProfile('FireDragonStorage')
 local ok,message=pcall(function()
  local remembered=UI.Window(GetFrame(0),{prefKey=key,x=40,y=60,width=400,height=240})
  remembered:SetSize(450,280);remembered:Close();remembered:Destroy()
@@ -63,7 +63,8 @@ local ok,message=pcall(function()
  assert(restored.Width()>=449 and restored.Width()<=451 and restored.Height()>=279 and restored.Height()<=281,'Native profile geometry restoration')
  restored:Destroy()
 end)
-prefs.SetToCurrentProfile(key,original)
+prefs.SetToCurrentProfile('FireDragonStorage',original)
+SavePreferences()
 assert(ok,message)
 """
 

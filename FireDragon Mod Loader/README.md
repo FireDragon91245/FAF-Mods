@@ -1,4 +1,4 @@
-The loader also installs as a normal FAF core mod. Enable **FireDragon Mod Loader** alongside FireDragon mods. Its standalone shared UI library provides windows, tabs, clipping, scrolling, layouts, controls, live bindings and image effects. See [UI library API](src/UI_LIBRARY.md) (installed package: `UI_LIBRARY.md`).
+The loader also installs as a normal FAF core mod. Enable **FireDragon Mod Loader** alongside FireDragon mods. Its standalone shared UI library provides windows, tabs, clipping, scrolling, layouts, controls, live bindings and image effects. See [UI library API](src/UI_LIBRARY.md) (installed package: `UI_LIBRARY.md`). Mods can save local data across sessions with the [shared storage API](src/STORAGE_API.md) (installed package: `STORAGE_API.md`). Version 7 moves UI window geometry into shared storage without migrating old preferences.
 
 # FireDragon Mod Loader
 
@@ -10,7 +10,7 @@ no Modular Shields integration code; that mod is an ordinary manifest consumer.
 
 ## Installation
 
-Close the game, extract `FireDragonModLoader-v6.zip`, and run `install.cmd`.
+Close the game, extract `FireDragonModLoader-v7.zip`, and run `install.cmd`.
 The installer detects the FAF vault from the client's `fa_path.lua`. Nonstandard
 paths can be supplied to `install.ps1 -FafDirectory <path> -ModsDirectory <path>`.
 No game launch arguments, executable decorator or runtime compiler is required.

@@ -1,7 +1,7 @@
 name = 'FireDragon Mod Loader'
 uid = '3f98ee06-c20c-4fd6-a29e-d7e306fd2026'
-version = 6
-description = 'Core shared UI library, native resource loader and Lua bridge for FireDragon mods. Loads shader techniques and DLL components from firedragonmod.json.'
+version = 7
+description = 'Core shared UI and persistent storage libraries, native resource loader and Lua bridge for FireDragon mods. Loads shader techniques and DLL components from firedragonmod.json.'
 author = 'Rick'
 selectable = true
 enabled = true

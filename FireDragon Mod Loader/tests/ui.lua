@@ -33,10 +33,12 @@ local drag
 function PostDragger(_,_,d) drag=d end
 local UIUtil={bodyFont='body',SkinnableFile=function(p) return '/skin'..p end}
 function UIUtil.CreateText(parent,text) local c=control(parent);c.Text=text;return c end
-local ui
+local ui,storage
 local savedPreferences={}
+function SavePreferences() end
 function import(path)
-    if path=='/lua/user/prefs.lua' then return {GetFromCurrentProfile=function(k) return savedPreferences[k] end,SetToCurrentProfile=function(k,v) savedPreferences[k]=v end} end
+    if path:find('FireDragon/Storage.lua',1,true) then return {Export=storage} end
+    if path=='/lua/user/prefs.lua' then return {GetCurrentProfile=function() return savedPreferences end,GetFromCurrentProfile=function(k) return savedPreferences[k] end,SetToCurrentProfile=function(k,v) savedPreferences[k]=v end} end
     if path=='/lua/maui/layouthelpers.lua' then return {ScaleNumber=function(v) return v end,InvScaleNumber=function(v) return v end} end
     if path=='/lua/maui/group.lua' then return {Group=control} end
     if path=='/lua/maui/bitmap.lua' then return {Bitmap=control} end
@@ -46,6 +48,7 @@ function import(path)
     if path:find('Keys.lua',1,true) then return {DefaultKey='Alt-Shift-D'} end
     error(path)
 end
+storage=assert(loadfile('src/lua/FireDragon/Storage.lua'))()
 ui=assert(loadfile('src/lua/FireDragon/UI.lua'))()
 local checks=0
 local function check(v,m) checks=checks+1;assert(v,m) end
@@ -117,8 +120,12 @@ local otherWindow=ui.Window(frame,{x=100,y=100,width=400,height=220,title='Overl
 testWindow:Focus()
 check(testWindow.Depth()>otherWindow.ResizeGrip.FDHit.Depth(),'focus raises the entire window above the other window chrome')
 otherWindow:Destroy()
+savedPreferences.test_window={left=50,top=60,width=350,height=250}
 local remembered=ui.Window(frame,{x=20,y=30,width=300,height=200,prefKey='test.window'})
+check(remembered.Left()==20 and remembered.Top()==30 and remembered.Width()==300 and remembered.Height()==200,'window ignores legacy flat profile geometry')
 remembered:SetSize(450,320);remembered.Left:Set(180);remembered.Top:Set(210);remembered:Destroy()
+check(storage.Get('FireDragon.UI','test.window').width==450,'window saves geometry through shared storage with exact keys')
+check(savedPreferences.test_window.width==350,'new writes leave legacy geometry intact')
 local restored=ui.Window(frame,{width=200,height=150,prefKey='test.window'})
 check(restored.Width()==450 and restored.Height()==320 and restored.Left()==180 and restored.Top()==210,'window restores saved position and size after destruction')
 restored.Left:Set(9999);restored.Top:Set(9999);restored:Close();restored:Destroy()

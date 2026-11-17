@@ -20,6 +20,8 @@ if ($LASTEXITCODE) { throw 'Loader mod metadata syntax failed' }
 
 Push-Location -LiteralPath $PSScriptRoot
 try {
+    & lua tests/storage.lua
+    if ($LASTEXITCODE) { throw 'Shared storage contract tests failed' }
     & lua tests/ui.lua
     if ($LASTEXITCODE) { throw 'Shared UI contract tests failed' }
     foreach ($source in Get-ChildItem (Join-Path $PSScriptRoot 'src') -Recurse -Filter *.lua) {

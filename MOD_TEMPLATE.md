@@ -60,9 +60,13 @@ after = { '3f98ee06-c20c-4fd6-a29e-d7e306fd2026' }
 
 Sim mods (`ui_only = false`) must be enabled by the host and are synced to every player.
 
-New FireDragon mods depend on the normal **FireDragon Mod Loader v4** core mod.
+New FireDragon mods depend on the normal **FireDragon Mod Loader v7** core mod.
 Use `import('/mods/FireDragonModLoader/lua/FireDragon/UI.lua').Export` for shared UI.
 See [the UI API](FireDragon%20Mod%20Loader/src/UI_LIBRARY.md).
+Use `import('/mods/FireDragonModLoader/lua/FireDragon/Storage.lua').Export.Open('MyMod')`
+for local profile data that persists across sessions. The returned store provides
+`:Get(key, default)`, `:Set(key, value)` (saved immediately) and `:Remove(key)`.
+See [the storage API](FireDragon%20Mod%20Loader/src/STORAGE_API.md).
 
 ## Hooks
 

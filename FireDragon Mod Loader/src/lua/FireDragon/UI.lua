@@ -381,12 +381,15 @@ function UI.Window(parent,o)
     function c:SetMinimumSize(w,h) self.MinWidth=w;self.MinHeight=h;self:SetSize(self.Width(),self.Height()) end
     function c:SetDraggable(v) self.Draggable=v end
     function c:SetResizable(v) self.Resizable=v;if v then self.ResizeGrip:Show() else self.ResizeGrip:Hide() end end
-    local prefs,layout
-    local prefKey=o.prefKey and string.gsub(o.prefKey,'%.','_')
-    if prefKey then prefs=import('/lua/user/prefs.lua');layout=import('/lua/maui/layouthelpers.lua') end
+    local storage,layout
+    local prefKey=o.prefKey
+    if prefKey then
+        storage=import('/mods/FireDragonModLoader/lua/FireDragon/Storage.lua').Export.Open('FireDragon.UI')
+        layout=import('/lua/maui/layouthelpers.lua')
+    end
     function c:SaveGeometry()
-        if not prefs then return end
-        prefs.SetToCurrentProfile(prefKey,{left=layout.InvScaleNumber(self.Left()-parent.Left()),top=layout.InvScaleNumber(self.Top()-parent.Top()),width=layout.InvScaleNumber(self.Width()),height=layout.InvScaleNumber(self.Height())})
+        if not storage then return end
+        storage:Set(prefKey,{left=layout.InvScaleNumber(self.Left()-parent.Left()),top=layout.InvScaleNumber(self.Top()-parent.Top()),width=layout.InvScaleNumber(self.Width()),height=layout.InvScaleNumber(self.Height())})
     end
     function c:Close() self:SaveGeometry();if o.onClose then o.onClose(self) else self:Hide() end end
     c.TitleBar=UI.Panel(c,{width=function() return c.Width() end,height=30,depth=40})
@@ -416,7 +419,7 @@ function UI.Window(parent,o)
     c.HandleEvent=function(self,e) if e.Type=='ButtonPress' then self:Focus();return true end;return e.Type=='ButtonDClick' end
     UI.Interactive(c)
     c:SetSize(value(o.width or 400),value(o.height or 300));c:SetResizable(c.Resizable)
-    local saved=prefs and prefs.GetFromCurrentProfile(prefKey)
+    local saved=storage and storage:Get(prefKey)
     if type(saved)=='table' and type(saved.left)=='number' and type(saved.top)=='number' and type(saved.width)=='number' and type(saved.height)=='number' then
         c:SetSize(math.min(parent.Width(),layout.ScaleNumber(saved.width)),math.min(parent.Height(),layout.ScaleNumber(saved.height)))
         c.Left:Set(clamp(parent.Left()+layout.ScaleNumber(saved.left),parent.Left(),math.max(parent.Left(),parent.Right()-c.Width())))
