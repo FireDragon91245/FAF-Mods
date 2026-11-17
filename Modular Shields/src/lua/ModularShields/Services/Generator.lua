@@ -3,6 +3,7 @@ local R = import(root .. 'Runtime.lua').Export
 local Assist = import(root .. 'Adapters/Assistance.lua').Export
 local Jobs = import(root .. 'Services/InstallJobs.lua').Export
 local Shield = import(root .. 'Adapters/Shield.lua').Export
+local HexDome = import(root .. 'Adapters/HexDome.lua').Export
 local Adjacency = import(root .. 'Adapters/Adjacency.lua').Export
 local AdjacencyEffects = import(root .. 'Adapters/AdjacencyEffects.lua').Export
 local Repair = import(root .. 'Behaviors/Repair.lua').Export
@@ -14,6 +15,7 @@ local function MakeGenerator(Base)
     return ClassUnit(Base) {
         CreateShield=function(self,spec)
             Base.CreateShield(self,spec)
+            HexDome.Attach(self)
             -- Leave the chassis repairable, but never expose the dome as native
             -- guard/repair work. Its HP is maintained by shield regeneration.
             if not self.ModuleUpgrading then self:ClearFocusEntity() end

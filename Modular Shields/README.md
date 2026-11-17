@@ -1,4 +1,9 @@
-# Modular Shields — playtest build
+# Modular Shields
+
+Version 19 declares its custom UEF T4 shaders in `firedragonmod.json` for the
+independent FireDragon Mod Loader. Install that dependency once; no launch settings are needed. See
+[UEF T4 visual test](docs/UEF_T4_HEX_TEST.md) for shader installation, the sandbox
+demo, health colours, rollback and validation limits.
 
 Standalone simulation mod implementing docs/SHIELD_MOD_PLAN.md and docs/MODULAR_CODE_DESIGN.md,
 with the user's clarified scope: shields handle AI-controlled attackers exactly as
@@ -37,7 +42,7 @@ Run `./build.ps1 -Install`, or extract/copy the complete `dist/ModularShields` f
 `C:/Users/Rick/Documents/My Games/Gas Powered Games/Supreme Commander Forged Alliance/mods/`
 
 Keep that folder name: the virtual import path is `/mods/ModularShields/`.
-Enable **Modular Shields (playtest)** in the FAF simulation mod list. Start with only
+Enable **Modular Shields** in the FAF simulation mod list. Start with only
 this mod enabled. All multiplayer clients need identical simulation files.
 
 Use T3 engineers to build the standalone faction generators. Sandbox unit IDs:

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "MyMod",
+  "version": 1,
+  "dlls": ["dlls/EngineHooks.dll"],
+  "shaders": {"MyModSurface": "shaders/Surface.fx"}
+}

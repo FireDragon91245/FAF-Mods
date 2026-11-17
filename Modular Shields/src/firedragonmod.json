@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "name": "ModularShields",
+  "version": 19,
+  "dlls": [],
+  "shaders": {
+    "ModularHexDome": "shaders/UEFT4Hex.fx",
+    "ModularHexHitBlue": "shaders/UEFT4Hex.fx",
+    "ModularHexHitYellow": "shaders/UEFT4Hex.fx",
+    "ModularHexHitRed": "shaders/UEFT4Hex.fx"
+  }
+}

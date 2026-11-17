@@ -1,0 +1,10 @@
+MeshBlueprint {
+    LODs = {{
+        MeshName = '/effects/entities/Sphere01/Sphere01_lod0.scm',
+        AlbedoName = '/mods/ModularShields/effects/entities/UEFT4Hex/HexSeams.dds',
+        ShaderName = 'ModularHexDome',
+        LODCutoff = 1000,
+    }},
+    SortOrder = 1000,
+    StraddleWater = true,
+}

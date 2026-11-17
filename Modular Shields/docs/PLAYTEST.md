@@ -16,7 +16,7 @@ AI shield construction/planning is outside the requested scope.
 
 ## First pass: construction and fitting
 
-1. Enable only Modular Shields (playtest). Build/spawn all eight faction chassis.
+1. Enable only Modular Shields. Build/spawn all eight faction chassis.
    Verify models, shield animations, faction icons, build access and bottom-center dock positioning.
 2. Damage a dome and fit Power I. Current HP must not jump. Range must resize both
    mesh and collision. Regen must heal after the normal damage delay.

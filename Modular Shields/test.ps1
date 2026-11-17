@@ -7,7 +7,8 @@
 #>
 param(
     # Run only test files whose name matches this wildcard (without .lua).
-    [string]$Filter = '*'
+    [string]$Filter = '*',
+    [switch]$SkipNativeBuild
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -38,6 +39,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Syntax failed: $($source.FullName)" }
     }
     Write-Host "PASS: $ran test files, $($sources.Count) Lua/blueprint syntax checks" -ForegroundColor Green
+    if ($Filter -eq '*') {
+        $loaderRoot = Join-Path (Split-Path -Parent $root) 'FireDragon Mod Loader'
+        & (Join-Path $loaderRoot 'test.ps1') -SkipBuild:$SkipNativeBuild -ConsumerDirectory $mod
+    }
 } finally {
     Pop-Location
 }
