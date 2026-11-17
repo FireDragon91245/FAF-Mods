@@ -41,3 +41,5 @@ target_include_directories(fd_test_lua PUBLIC native/third_party/test_lua/includ
 target_compile_definitions(fd_test_lua PUBLIC LUA_NUMBER=float)
 add_executable(lua-test tests/lua_bridge.cpp native/src/lua_bridge.cpp)
 target_link_libraries(lua-test PRIVATE fd_test_lua)
+add_executable(lua-script-test tests/lua_script.cpp)
+target_link_libraries(lua-script-test PRIVATE fd_test_lua)

@@ -1,4 +1,6 @@
-The loader also installs as a normal FAF core mod. Enable **FireDragon Mod Loader** alongside FireDragon mods. Its standalone shared UI library provides windows, tabs, clipping, scrolling, layouts, controls, live bindings and image effects. See [UI library API](src/UI_LIBRARY.md) (installed package: `UI_LIBRARY.md`). Mods can save local data across sessions with the [shared storage API](src/STORAGE_API.md) (installed package: `STORAGE_API.md`). Version 7 moves UI window geometry into shared storage without migrating old preferences.
+The loader also installs as a normal FAF core mod. Enable **FireDragon Mod Loader** alongside FireDragon mods. Its standalone shared UI library provides windows, tabs, clipping, scrolling, layouts, controls, live bindings and image effects. See [UI library API](src/UI_LIBRARY.md) (installed package: `UI_LIBRARY.md`). Mods can save local data across sessions with the [shared storage API](src/STORAGE_API.md) (installed package: `STORAGE_API.md`). Version 8 adds the [Information Exchange API](src/INFORMATION_EXCHANGE_API.md): observable configuration, notifications and nonblocking request/reply, shared across mods within each Lua runtime. Version 7 moved UI window geometry into shared storage without migrating old preferences.
+
+Version 9 makes notification delivery configurable (`Broadcast` or shared `Consume`), adds safe peek/take operations, and supports either all request replies or the first successful reply with exclusive responder claims.
 
 # FireDragon Mod Loader
 
@@ -10,7 +12,7 @@ no Modular Shields integration code; that mod is an ordinary manifest consumer.
 
 ## Installation
 
-Close the game, extract `FireDragonModLoader-v7.zip`, and run `install.cmd`.
+Close the game, extract `FireDragonModLoader-v9.zip`, and run `install.cmd`.
 The installer detects the FAF vault from the client's `fa_path.lua`. Nonstandard
 paths can be supplied to `install.ps1 -FafDirectory <path> -ModsDirectory <path>`.
 No game launch arguments, executable decorator or runtime compiler is required.
