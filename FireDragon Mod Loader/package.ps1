@@ -15,10 +15,11 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\include\firedragonmod.sc
 Copy-Item (Join-Path $PSScriptRoot 'examples\*') -Destination (Join-Path $package 'examples')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\third_party\nlohmann\LICENSE.MIT') -Destination (Join-Path $package 'licenses\nlohmann-json-LICENSE.MIT')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\third_party\minhook\LICENSE.txt') -Destination (Join-Path $package 'licenses\minhook-LICENSE.txt')
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'src\mod_info.lua') -Destination $package
+Copy-Item (Join-Path $PSScriptRoot 'src\*') -Destination $package -Recurse -Force
 foreach ($name in 'install.ps1','install.cmd','uninstall.cmd','README.md') {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $package
 }
-$zip = Join-Path $PSScriptRoot 'dist\FireDragonModLoader-v2.zip'
+$version = (Select-String (Join-Path $PSScriptRoot 'src\mod_info.lua') -Pattern '^version\s*=\s*(\d+)').Matches[0].Groups[1].Value
+$zip = Join-Path $PSScriptRoot "dist\FireDragonModLoader-v$version.zip"
 Compress-Archive -LiteralPath $package -DestinationPath $zip -Force
 Write-Host "Release package: $zip"

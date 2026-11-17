@@ -1,3 +1,5 @@
+Requires **FireDragon Mod Loader v3** installed and enabled as a normal FAF mod (shared core dependency).
+
 # Insta Build Render My Units!
 
 Fixes units, factories and upgraded structures that stay invisible when they are

@@ -1,3 +1,7 @@
+Upgrade and cancellation clicks update immediately and reconcile with the simulation, including dependent queue cancellation and cancelling requests that have not yet received a job ID. The window remembers its geometry per FAF profile, with horizontal and vertical scrolling when resized.
+
+Requires **FireDragon Mod Loader v6** installed and enabled as a normal FAF mod (shared core dependency).
+
 # Modular Shields
 
 Version 19 declares its custom UEF T4 shaders in `firedragonmod.json` for the

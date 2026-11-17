@@ -1,3 +1,5 @@
+Requires **FireDragon Mod Loader v4** installed and enabled as a normal FAF mod (shared core dependency).
+
 # FireDragon Debug Tools
 
 A small in-game debug panel for testing. It has two toggles:

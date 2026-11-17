@@ -8,7 +8,7 @@
 param(
     # Run only test files whose name matches this wildcard (without .lua).
     [string]$Filter = '*',
-    # In-game mod folder; every /mods/<X>/ path in src must use it.
+    # In-game mod folder; imports may also target the shared core dependency.
     [string]$ModFolder = 'FireDragonDebugTools'
 )
 $ErrorActionPreference = 'Stop'
@@ -40,9 +40,9 @@ try {
     }
 
     $wrong = @($sources | Select-String -Pattern '/mods/([^/''"]+)/' -AllMatches | ForEach-Object {
-        foreach ($m in $_.Matches) { if ($m.Groups[1].Value -ne $ModFolder) { "$($_.Path):$($_.LineNumber): $($m.Value)" } }
+        foreach ($m in $_.Matches) { if ($m.Groups[1].Value -notin @($ModFolder, 'FireDragonModLoader')) { "$($_.Path):$($_.LineNumber): $($m.Value)" } }
     })
-    if ($wrong.Count) { throw "Import paths must use /mods/$ModFolder/:`n$($wrong -join "`n")" }
+    if ($wrong.Count) { throw "Import paths must use this mod or FireDragonModLoader:`n$($wrong -join "`n")" }
 
     Write-Host "PASS: $ran test files, $($sources.Count) Lua/blueprint syntax checks" -ForegroundColor Green
 } finally {

@@ -47,6 +47,8 @@ def main():
         receipt_path = local/'FireDragonModLoader/installation.json'
         receipt = json.loads(receipt_path.read_text(encoding='utf-8-sig'))
         assert (installed/'bin/FireDragonLoader.dll').is_file()
+        assert (installed/'lua/FireDragon/UI.lua').is_file(), 'Normal mod must ship shared Lua library'
+        assert 'ui_only = false' in (installed/'mod_info.lua').read_text()
         assert (faf/'bin/dsound.dll').is_file() and (faf/'replaydata/bin/dsound.dll').is_file()
         assert str(installed/'bin/FireDragonLoader.dll') in (faf/'bin/FireDragonLoader.ini').read_text(encoding='utf-16')
         assert not any('Fixture' in f['Path'] or 'loader-test.exe' in f['Path'] for f in receipt['Files'])

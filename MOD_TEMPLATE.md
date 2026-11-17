@@ -37,7 +37,7 @@ Reference implementation: `Modular Shields/` (it adds generated icon artifacts a
 
 FAF loads mod files through `/mods/<ModFolder>/...`. If the installed folder name and the
 import paths disagree, the mod silently breaks, so `test.ps1` rejects any `/mods/<X>/`
-reference where `X` is not `<ModFolder>`.
+reference where `X` is neither `<ModFolder>` nor the shared core `FireDragonModLoader`.
 
 ## src/mod_info.lua
 
@@ -51,13 +51,18 @@ selectable = true
 enabled = true
 exclusive = false
 ui_only = false             -- true only when the mod has no sim hooks
-requires = {}
+requires = { '3f98ee06-c20c-4fd6-a29e-d7e306fd2026' }
+requiresNames = { ['3f98ee06-c20c-4fd6-a29e-d7e306fd2026'] = 'FireDragon Mod Loader' }
 conflicts = {}
 before = {}
-after = {}
+after = { '3f98ee06-c20c-4fd6-a29e-d7e306fd2026' }
 ```
 
 Sim mods (`ui_only = false`) must be enabled by the host and are synced to every player.
+
+New FireDragon mods depend on the normal **FireDragon Mod Loader v4** core mod.
+Use `import('/mods/FireDragonModLoader/lua/FireDragon/UI.lua').Export` for shared UI.
+See [the UI API](FireDragon%20Mod%20Loader/src/UI_LIBRARY.md).
 
 ## Hooks
 

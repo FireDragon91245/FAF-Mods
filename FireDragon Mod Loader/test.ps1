@@ -17,3 +17,13 @@ if ($LASTEXITCODE) { throw 'Native loader integration tests failed' }
 if ($LASTEXITCODE) { throw 'Native loader installer tests failed' }
 & luac -p (Join-Path $PSScriptRoot 'src\mod_info.lua')
 if ($LASTEXITCODE) { throw 'Loader mod metadata syntax failed' }
+
+Push-Location -LiteralPath $PSScriptRoot
+try {
+    & lua tests/ui.lua
+    if ($LASTEXITCODE) { throw 'Shared UI contract tests failed' }
+    foreach ($source in Get-ChildItem (Join-Path $PSScriptRoot 'src') -Recurse -Filter *.lua) {
+        & luac -p $source.FullName
+        if ($LASTEXITCODE) { throw "Lua syntax failed: $($source.FullName)" }
+    }
+} finally { Pop-Location }

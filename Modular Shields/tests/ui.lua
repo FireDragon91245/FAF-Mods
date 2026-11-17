@@ -18,12 +18,23 @@ local function loadCore(path)
 end
 local R=loadCore('Bootstrap.lua').Build(loadCore)
 local controls={}
+local preferences={}
+local clock=0
+function GetSystemTimeSeconds() return clock end
+function GetFocusArmy() return 1 end
 local function lazy(value)
     return setmetatable({Value=value,Set=function(self,v) self.Value=v end},
         {__call=function(self) if type(self.Value)=='function' then return self.Value() end;return self.Value end})
 end
 local function control(kind,parent,name)
     local c={Kind=kind,Parent=parent,Name=name,Children={},Width=lazy(0),Height=lazy(0),Left=lazy(0),Top=lazy(0)}
+    c.Right=lazy(function() return c.Left()+c.Width() end);c.Bottom=lazy(function() return c.Top()+c.Height() end)
+    function c:UseAlphaHitTest(v) self.AlphaHit=v end
+    function c:SetNeedsFrameUpdate(v) self.NeedsFrameUpdate=v end
+    function c:GetRootFrame() return GetFrame(0) end
+    function c:SetUV(...) self.UV={...} end
+    function c:SetAlpha(v) self.Alpha=v end
+    function c:GetStringAdvance(s) return #s*7 end
     c.Depth=lazy(function() return parent and parent.Depth()+1 or 0 end)
     if parent then parent.Children[#parent.Children+1]=c end
     function c:DisableHitTest() self.NoHit=true end
@@ -39,22 +50,29 @@ local function control(kind,parent,name)
     function c:Hide() self.Hidden=true end
     function c:Enable() self.Disabled=false;self.NoHit=false end
     function c:Disable() self.Disabled=true;self.NoHit=true end
-    function c:Destroy() self.Destroyed=true;for _,child in ipairs(self.Children) do child:Destroy() end end
+    function c:Destroy() self.Destroyed=true;if self.OnDestroy then self:OnDestroy() end;for _,child in ipairs(self.Children) do child:Destroy() end end
     controls[#controls+1]=c;return c
 end
 local frame=control('frame');frame.Width:Set(1920);frame.Height:Set(1080)
 function GetFrame() return frame end
-local layout={}
+local layout={ScaleNumber=function(v) return v end,InvScaleNumber=function(v) return v end}
 function layout.AtLeftTopIn(c,parent,x,y) c.Left:Set(function() return parent.Left()+x end);c.Top:Set(function() return parent.Top()+y end) end
 function layout.AtRightTopIn(c,parent,x,y) c.Left:Set(function() return parent.Left()+parent.Width()-c.Width()-x end);c.Top:Set(function() return parent.Top()+y end) end
 function layout.FillParent(c,parent) c.Left:Set(function() return parent.Left() end);c.Top:Set(function() return parent.Top() end);c.Width:Set(function() return parent.Width() end);c.Height:Set(function() return parent.Height() end) end
-local UI={bodyFont='body'}
+local UI={bodyFont='body',SkinnableFile=function(p) return '/skin'..p end}
 function UI.CreateText(parent,label) local t=control('text',parent);t:SetText(label);return t end
 function UI.CreateButtonStd(parent,texture,label)
     assert(texture=='/scx_menu/small-btn/small','Use known native button textures')
     local b=control('button',parent);b.label=UI.CreateText(b,label);b.label:DisableHitTest();return b
 end
+local sharedUI
 function import(path)
+    if path=='/lua/user/prefs.lua' then return {GetFromCurrentProfile=function(k) return preferences[k] end,SetToCurrentProfile=function(k,v) preferences[k]=v end} end
+    if path=='/mods/FireDragonModLoader/lua/FireDragon/UI.lua' then
+        if not sharedUI then sharedUI=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/UI.lua'))() end
+        return {Export=sharedUI}
+    end
+    if path=='/lua/maui/dragger.lua' then return {Dragger=function() return {Destroy=function() end} end} end
     if path=='/lua/maui/group.lua' then return {Group=function(parent,name) return control('group',parent,name) end} end
     if path=='/lua/maui/bitmap.lua' then return {Bitmap=function(parent) return control('bitmap',parent) end} end
     if path=='/lua/maui/layouthelpers.lua' then return layout end
@@ -63,6 +81,7 @@ function import(path)
     if path:find('UI/Model.lua',1,true) then return {Export=loadCore('UI/Model.lua')} end
     error('Unexpected UI import '..path)
 end
+local owned
 local state=R.Core.New('t3',{Mass=1000,Energy=10000,Upkeep=100,ShieldMaxHP=10000,ShieldSize=40,ShieldRegen=100})
 state.Rules=R.Core
 local selected={{GetEntityId=function() return 1001 end}}
@@ -76,7 +95,7 @@ local function sync()
     for _,id in ipairs(R.Registry.Order) do
         local d=R.Registry.Modules[id]
         local reason=R.Core.Eligible(state,id,R.Registry,R.Config,true)
-        rows[#rows+1]={Id=id,Family=d.Family,Level=d.Level,Behavior=d.Behavior,Name=d.UI.Name,
+        rows[#rows+1]={Id=id,Family=d.Family,Level=d.Level,Behavior=d.Behavior,Name=d.UI.Name,Requires=d.Requires,
             Installed=state.Installed[id]~=nil,Reason=reason and reason.Code or false,
             Detail=reason and (reason.Module or reason.Behavior) or false,
             Deltas={ShieldMaxHP=d.Family=='power' and 2500 or 0,ShieldRegen=d.Family=='regen' and 30 or 0,Upkeep=10},
@@ -85,28 +104,34 @@ local function sync()
     local job=state.Queue[1]
     Sync={UnitData={[1001]={ModularShield={Rows=rows,Used=R.Core.Used(state,R.Registry),Slots=R.Core.Capacity(state,R.Config),Faction='CYBRAN',RemovalSeconds=5,
         BaseSlots=R.Config.Chassis[state.Chassis].Slots,BonusSlots=state.BonusSlots or 0,
-        Queue=table.deepcopy(state.Queue),QueueCount=#state.Queue,Stats=R.Stats.Calculate(state,R.Registry,R.Config),
+        UIResponses=table.deepcopy(owned and owned.ModuleUIResponses or {}),Capabilities=state.Capabilities,Queue=table.deepcopy(state.Queue),QueueCount=#state.Queue,Stats=R.Stats.Calculate(state,R.Registry,R.Config),
         InstallPaused=paused,RepairPaused=repairPaused,ActualEnergy=100,Assistants=0,WorkRate=40,Barrier='NotInstalled',
         Job=job and {Id=job.JobId,Module=job.ModuleId,Progress=job.PaidWork/job.Quote.Work,State=job.State} or false},
         ModularShieldLive={HP=8000,MaxHP=10000,Regen=100,Damage=240,Status='Regenerating'}}}}
     OnSync()
 end
 local sent={}
-local owned={ModuleAction=function(_,action,value)
-    if action=='install' then assert(R.Core.RequestInstall(state,value,R.Registry,R.Config))
+local delayed={}
+local delayCallbacks=false
+owned={ModuleAction=function(_,action,value)
+    local created
+    if action=='install' then created=assert(R.Core.RequestInstall(state,value,R.Registry,R.Config))
     elseif action=='remove' then assert(R.Core.RequestUninstall(state,value,R.Registry,R.Config))
     elseif action=='cancel' then assert(not R.Core.RequestCancel(state,value,R.Registry))
     elseif action=='pause' then paused=not paused
     elseif action=='repair' then repairPaused=not repairPaused end
     sync()
+    return created
 end}
+owned.PublishModules=sync
 local secureCalled=false
 function SecureUnits(units) secureCalled=true;assert(units[1]==owned);return units end
 function DoCallback() error('Unexpected fallback') end
 assert(loadfile('src/hook/lua/SimCallbacks.lua'))()
 function SimCallback(request,withSelection)
     assert(withSelection==true)
-    sent[#sent+1]=request;DoCallback(request.Func,request.Args,{owned})
+    sent[#sent+1]=request
+    if delayCallbacks then delayed[#delayed+1]=request else DoCallback(request.Func,request.Args,{owned}) end
 end
 local Panel=loadCore('UI/Panel.lua')
 local Model=loadCore('UI/Model.lua')
@@ -124,15 +149,77 @@ local function click(c,right)
 end
 local function hover(c) c:HandleEvent({Type='MouseEnter'}) end
 sync();Panel.Update()
-local dock=find(function(c) return c.Name=='Modular Shield Dock' end)
+local window=find(function(c) return c.Name=='Modular Shield Window' end)
+local dock=card('power_1').Parent
 local tip=find(function(c) return c.Name=='Module Tooltip' end)
-check(dock.Left()==(1920-760)/2 and dock.Top()+dock.Height()<900,'Dock is bottom center immediately above the native construction group')
+check(window.Width()==780 and window.MinWidth==420 and window.Resizable,'Shield menu uses a resizable shared window with minimum size')
 check(label('HP  8000 / 10000').Color==Model.Colors.HP,'Live current/max HP is blue')
 check(label('+100 HP/s  Regenerating').Color==Model.Colors.Regen,'Live regeneration is green')
 check(label('-240 HP/s  (5s avg)').Color==Model.Colors.Damage,'Rolling incoming damage is red')
+-- Deliberately hold the simulation replies: the UI must remain responsive.
+delayCallbacks=true
+local first=card('power_1')
+first:HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+check(#state.Queue==0 and first.Top()==dock.Top()+158 and not card('power_2').Hidden,'click moves pending upgrade immediately without a simulation reply')
+check(label('...') and not label('...').Parent.Hidden,'pending installation has immediate feedback')
+card('power_2'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+card('range_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+check(#delayed==3 and not card('power_3').Hidden,'rapid clicks queue prerequisites and another family without waiting')
+Panel.Update();Panel.Update()
+check(first.Top()==dock.Top()+158 and #state.Queue==0,'stale snapshots preserve pending entries')
+for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+delayed={};delayCallbacks=false;Panel.Update()
+check(#state.Queue==3 and label('0%'),'acknowledgements replace pending indicators with real jobs')
+delayCallbacks=true
+first:HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
+check(#state.Queue==3 and first.Top()>dock.Top()+158 and card('power_2').Hidden,'cancel immediately removes the target and dependent queue without a sim reply')
+check(card('range_1').Top()==dock.Top()+158,'cancel keeps unrelated queued upgrades')
+Panel.Update();Panel.Update()
+check(first.Top()>dock.Top()+158,'stale snapshots do not restore a cancelled job')
+for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+delayed={};delayCallbacks=false;Panel.Update()
+check(#state.Queue==1 and state.Queue[1].ModuleId=='range_1','cancel acknowledgement matches the projected queue')
+state.Queue={};state.Revision=state.Revision+1;sync();Panel.Update()
+-- A rejected request is rolled back from an explicit receipt, not an arbitrary beat delay.
+delayCallbacks=true
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+local rejected=delayed[1]
+owned.ModuleUIResponses[rejected.Args.RequestId]=true
+state.Queue={};sync();Panel.Update()
+check(card('power_1').Top()>dock.Top()+158 and card('power_2').Hidden,'rejected request returns to upgrades and hides its dependent level')
+delayed={}
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+clock=6;Panel.Update()
+check(card('power_1').Top()>dock.Top()+158,'unanswered request times out without a stuck module')
+delayed={};clock=7
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+card('power_2'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
+check(#delayed==3 and delayed[3].Args.CancelRequestId==delayed[1].Args.RequestId,'pending install can be cancelled using its request token before it has a job id')
+check(card('power_1').Top()>dock.Top()+158 and card('power_2').Hidden,'pre-ack cancellation removes pending dependents immediately')
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
+local replacementToken=delayed[4].Args.RequestId
+local originalInstall=table.remove(delayed,1)
+DoCallback(originalInstall.Func,originalInstall.Args,{owned});Panel.Update()
+check(#state.Queue==1 and card('power_1').Top()==dock.Top()+158,'old install acknowledgement does not consume a replacement install request')
+for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+delayed={};Panel.Update()
+check(#state.Queue==1 and state.Queue[1].ModuleId=='power_1' and state.Queue[1].UIRequestId==replacementToken,'install-cancel-reinstall processes correctly in send order')
+-- A rejected cancel must restore the original job after its explicit response.
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
+check(card('power_1').Top()>dock.Top()+158,'confirmed job cancellation projects immediately')
+local rejectedCancel=delayed[1]
+owned.ModuleUIResponses[rejectedCancel.Args.RequestId]=true;sync();Panel.Update()
+check(card('power_1').Top()==dock.Top()+158 and #state.Queue==1,'rejected cancellation restores authoritative job')
+delayed={}
+card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
+clock=13;Panel.Update()
+check(card('power_1').Top()==dock.Top()+158,'unanswered cancellation times out without a hidden job')
+state.Queue={};state.Revision=state.Revision+1;sync();Panel.Update()
+delayed={};delayCallbacks=false;sent={};clock=14
 local power1=card('power_1')
 check(not power1.Hidden and card('power_2').Hidden,'Upgrade row shows the next module level of each family')
-local image=find(function(c) return c.Parent==power1 and c.Texture end)
+local image=find(function(c) return c.Parent and c.Parent.Parent==power1 and c.Texture end)
 check(image.Texture:find('cybran_power_1.dds',1,true),'Module icon uses its faction-specific texture')
 hover(power1)
 check(not tip.Hidden and label('+2500 maximum shield HP').Color==Model.Colors.HP,'Native hover popup shows capacity change in blue')
@@ -157,7 +244,13 @@ check(label('-2500 maximum shield HP on removal').Color==Model.Colors.HP,'Instal
 click(power1,true)
 check(state.Installed.power_1 and state.Queue[1].Kind=='Remove','Right-click queues timed removal instead of instantly deinstalling')
 check(label('REMOVE') and image.Texture:find('_dim.dds',1,true),'Removal has a gray icon and explicit removal overlay')
-click(power1,true)
+delayCallbacks=true
+power1:HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
+check(state.Queue[1].Kind=='Remove' and state.Installed.power_1 and not label('REMOVE'),'cancelling removal immediately clears its overlay while keeping the module installed')
+Panel.Update()
+check(not label('REMOVE'),'stale snapshots do not revive removal overlay')
+for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+delayed={};delayCallbacks=false;Panel.Update()
 check(state.Installed.power_1 and #state.Queue==0,'Right-clicking removal cancels it and keeps installed module')
 click(power1,true);job=state.Queue[1];job.PaidWork=job.Quote.Work
 assert(not R.Core.Complete(state,job,R.Registry,R.Config));sync();Panel.Update()
@@ -166,7 +259,7 @@ hover(card('deflector'))
 check(label('Deflects crashing aircraft and selected').Color==Model.Colors.Special,'Special effect hover descriptions are orange')
 card('deflector'):HandleEvent({Type='MouseExit'})
 check(tip.Hidden,'Moving away closes the tooltip')
-check(label('Deflects crashing aircraft and selected').Hidden,'Tooltip child text also hides without leaving ghosts')
+check(label('Deflects crashing aircraft and selected').Parent.Hidden,'Tooltip child text also hides without leaving ghosts')
 hover(card('impenetrable'))
 check(label('[missing] Deflector') and label('[missing] Atomized (nuclear containment)') and label('[missing] Ballistic (missile defense)'),'Impenetrable lists all three special-module requirements separately')
 check(label('T1 generators and all storage are excluded.'),'Impenetrable explains the T2+ generator requirement and excludes storage')
@@ -180,10 +273,38 @@ for _,id in ipairs({'power_1','power_2','range_1','regen_1','repair_1','deflecto
     state.Installed[id]={Id=id,Quote=R.Core.Quote(state,id,R.Registry,R.Config)}
 end
 sync();Panel.Update()
-check(dock.Height()==403 and card('impenetrable').Top()==dock.Top()+231,'Storage-supported modules beyond eight wrap into another equipped row')
+check(dock.Height()>=403 and card('impenetrable').Top()==dock.Top()+231,'Storage-supported modules beyond eight wrap into another equipped row')
 local before=#controls
 for n=1,20 do Panel.Update() end
 check(#controls==before,'Status updates preserve image/control identity')
+-- Hover surfaces must follow both window movement and scroll offsets.
+window.Left:Set(window.Left()+123);window.Top:Set(window.Top()+47);window.Height:Set(260)
+local viewport=dock.Parent.FDScrollOwner or dock.Parent
+viewport:ScrollTo(80,40)
+local root=card('power_1')
+root.FDVisual:Hide() -- root surface is decorative; its separate native hit area remains active
+check(root.FDHit.AlphaHit==false,'Module hit regions ignore bitmap alpha')
+check(root.FDHit.Left()==math.max(root.Left(),viewport.Left()) and root.FDHit.Top()==math.max(root.Top(),viewport.Top()),'Module hover hitbox follows translated/scrolled visual bounds')
+root.FDHit:HandleEvent({Type='MouseEnter',MouseX=root.FDHit.Left()+2,MouseY=root.FDHit.Top()+2})
+check(not tip.Hidden and tip.Left()>=frame.Left()+8 and tip.Top()>=frame.Top()+8,'Tooltip anchors to the actual hit surface and stays onscreen')
+viewport:ScrollTo(80,60)
+check(tip.Hidden,'Scrolling clears a stale tooltip')
+local captured
+function PostDragger(_,_,drag) captured=drag end
+local close=window.CloseButton
+close.FDHit:HandleEvent({Type='MouseEnter'})
+close.FDHit:HandleEvent({Type='ButtonPress',KeyCode=1,Modifiers={Left=true}})
+captured:OnRelease(close.Left()+12,close.Top()+12)
+check(window.Hidden and tip.Hidden,'Shield close button hides its window and tooltip')
 selected={};Panel.Update()
-check(dock.Destroyed and tip.Destroyed,'Deselecting cleans up dock and floating tooltip')
+check(window.Destroyed and dock.Destroyed and tip.Destroyed,'Deselecting cleans up dock and floating tooltip')
+local saved=preferences['FireDragon_ModularShields_Window']
+selected={{GetEntityId=function() return 1001 end}};Panel.Update()
+local reopened=find(function(c) return c.Name=='Modular Shield Window' end)
+check(reopened.Left()==saved.left and reopened.Top()==saved.top and reopened.Width()==saved.width and reopened.Height()==saved.height,'shield reselection restores window position and size')
+local resizedViewport=card('power_1').Parent.Parent.FDScrollOwner
+check(resizedViewport~=nil,'scroll hierarchy exposes its owner')
+resizedViewport:RefreshScrollbars()
+check(not resizedViewport.HorizontalScrollbar.Hidden,'narrow shield window exposes horizontal scrollbar')
+selected={};Panel.Update()
 print('PASS: '..count..' image UI/callback checks')

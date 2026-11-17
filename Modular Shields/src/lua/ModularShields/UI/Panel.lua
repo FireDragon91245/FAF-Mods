@@ -1,26 +1,30 @@
-local Group=import('/lua/maui/group.lua').Group
-local Bitmap=import('/lua/maui/bitmap.lua').Bitmap
-local UI=import('/lua/ui/uiutil.lua')
-local Controls=import('/lua/ui/controls.lua')
+local UI=import('/mods/FireDragonModLoader/lua/FireDragon/UI.lua').Export
+local function Group(parent,name) return UI.Panel(parent,{name=name}) end
+local function Bitmap(parent) return UI.Icon(parent,{color='00000000'}) end
 local Model=import('/mods/ModularShields/lua/ModularShields/UI/Model.lua').Export
 local C=Model.Colors
 local view
+local Update
+local requestSerial=0
 local function Send(action,value) SimCallback({Func='ModularShieldAction',Args={Action=action,Value=value}},true) end
+local function QueueRequest(v,action,row,job)
+    requestSerial=requestSerial+1
+    local now=GetSystemTimeSeconds()
+    local token=tostring(GetFocusArmy())..':'..tostring(now)..':'..tostring(requestSerial)
+    local jobId=job and job.JobId or nil
+    local cancelRequestId=job and not jobId and job.RequestId or nil
+    table.insert(v.Pending,{Action=action,ModuleId=row.Id,RequestId=token,JobId=jobId,CancelRequestId=cancelRequestId,Expires=now+5})
+    Update() -- render before the sim has processed installs or cancels
+    SimCallback({Func='ModularShieldAction',Args={Action=action,Value=action=='cancel' and jobId or row.Id,CancelRequestId=cancelRequestId,RequestId=token}},true)
+end
 local function Text(control,value,color)
     if control.Value~=value then control:SetText(value);control.Value=value end
     if color and control.Tint~=color then control:SetColor(color);control.Tint=color end
 end
 local function Visible(control,value) if value then control:Show() else control:Hide() end end
-local function At(control,parent,x,y,w,h)
-    control.Left:Set(function() return parent.Left()+x end);control.Top:Set(function() return parent.Top()+y end)
-    if w then control.Width:Set(w) end;if h then control.Height:Set(h) end
-end
+local At=UI.At
 local function Label(parent,x,y,w,size,color)
-    local t=UI.CreateText(parent,'',size,UI.bodyFont)
-    t:DisableHitTest();t:SetClipToWidth(true);t:SetDropShadow(true)
-    t.Depth:Set(function() return parent.Depth()+5 end);At(t,parent,x,y,w)
-    t:SetColor(color or C.Text)
-    return t
+    return UI.Label(parent,{x=x,y=y,width=w,height=size+4,size=size,color=color or C.Text})
 end
 local function Rect(parent,x,y,w,h,color,depth)
     local b=Bitmap(parent);b:SetSolidColor(color);b:DisableHitTest()
@@ -37,12 +41,18 @@ local function HideTip(v)
     for _,control in ipairs(v.TipLines) do control:Hide() end
 end
 local function UpdateTooltip(v)
-    if not v.Hovered or not v.Hovered.Visible then HideTip(v);return end
+    if v.Window:IsHidden() or not v.Hovered or not v.Hovered.Visible then HideTip(v);return end
     local card=v.Hovered
     local lines=card.Lines and card.Lines() or Model.Tooltip(card.Data,v.State)
     v.Tip.Height:Set(24+table.getn(lines)*20)
-    v.Tip.Left:Set(function() return math.max(8,math.min(GetFrame(0).Width()-v.Tip.Width()-8,card.Root.Left()-12)) end)
-    v.Tip.Top:Set(function() return math.max(8,v.Panel.Top()-v.Tip.Height()-8) end)
+    local frame=GetFrame(0)
+    local anchor=card.Root.FDHit or card.Root
+    v.Tip.Left:Set(function() return math.max(frame.Left()+8,math.min(frame.Right()-v.Tip.Width()-8,anchor.Left())) end)
+    v.Tip.Top:Set(function()
+        local above=anchor.Top()-v.Tip.Height()-8
+        local y=above>=frame.Top()+8 and above or anchor.Top()+anchor.Height()+8
+        return math.max(frame.Top()+8,math.min(frame.Bottom()-v.Tip.Height()-8,y))
+    end)
     for index,t in ipairs(v.TipLines) do
         local line=lines[index]
         Text(t,line and line.Text or '',line and line.Color)
@@ -53,22 +63,19 @@ local function UpdateTooltip(v)
 end
 local function Create(state,id)
     local frame=GetFrame(0)
-    local p=Group(frame,'Modular Shield Dock')
-    p.Depth:Set(100);p.Width:Set(function() return math.min(760,frame.Width()-32) end);p.Height:Set(330)
-    p.Left:Set(function() return (frame.Width()-p.Width())/2 end)
-    p.Top:Set(function()
-        local native=Controls.Get().constructionGroup
-        local top=frame.Height()-190
-        if native and not native:IsHidden() and native.Top()>frame.Height()/2 then top=native.Top() end
-        return math.max(8,top-p.Height()-8)
-    end)
-    p.HandleEvent=function(_,event) return event.Type=='ButtonPress' or event.Type=='ButtonDClick' end
-    local v={Panel=p,EntityId=id,State=state,Cards={}}
+    local window=UI.Window(frame,{name='Modular Shield Window',title='Modular Shield Upgrades',
+        prefKey='FireDragon_ModularShields_Window',x=(frame.Width()-780)/2,y=math.max(8,frame.Height()-650),width=780,height=450,minWidth=420,minHeight=260})
+    local scroll=UI.Scroll(window.Client,{contentWidth=760,contentHeight=403});UI.Fill(scroll,window.Client,6)
+    local p=scroll.Content
+    local v={Panel=p,Window=window,Scroll=scroll,EntityId=id,State=state,Cards={},Pending={}}
+    scroll.OnScroll=function()
+        if v.Hovered and v.Hovered.Hover then v.Hovered.Hover:Hide();v.Hovered.Hovered=false end
+        v.Hovered=nil;HideTip(v)
+    end
+    local onHide=window.OnHide
+    window.OnHide=function(self,hidden) onHide(self,hidden);if hidden and v.Tip then HideTip(v) end end
     local accents={UEF='ff69b8fa',AEON='ff74e4bb',CYBRAN='fff67b83',SERAPHIM='ffefca78'}
     local accent=accents[state.Faction] or accents.UEF
-    local border=Rect(p,0,0,760,250,'ff344958',0)
-    border.Width:Set(p.Width);border.Height:Set(p.Height)
-    local bg=Rect(p,1,1,758,248,'f20a141f',1);bg.Width:Set(function() return p.Width()-2 end);bg.Height:Set(function() return p.Height()-2 end)
     local stripe=Rect(p,1,1,758,3,accent,2);stripe.Width:Set(function() return p.Width()-2 end)
     local divider=Rect(p,14,146,732,1,'ff263c4c',2);divider.Width:Set(function() return p.Width()-28 end)
     v.Title=Label(p,16,10,490,14,C.Text)
@@ -87,8 +94,9 @@ local function Create(state,id)
     v.Hint=Label(p,16,178,108,10,C.Muted);Text(v.Hint,'Click to fit')
     v.Info=Label(p,16,220,728,11,C.Muted)
     local function toggle(x,symbol,action)
-        local b=Bitmap(p);At(b,p,x,9,24,23);b:SetSolidColor('ff24394b');b.Depth:Set(107)
-        local t=Label(b,5,2,20,14,C.Text);Text(t,symbol)
+        local b=UI.Button(p,{x=x,y=9,width=24,height=23,text=symbol,onClick=function() Send(action) end})
+        b.Depth:Set(function() return p.Depth()+7 end)
+        local t=b.Label
         local hover={Root=b,Visible=true,Lines=function()
             if action=='pause' then return {
                 {Text=v.State.InstallPaused and 'Resume module work' or 'Pause module work',Color=C.Cost},
@@ -99,29 +107,30 @@ local function Create(state,id)
                 {Text='Controls repairs to nearby structures.',Color=C.Text},
                 {Text='Shield regeneration continues normally.',Color=C.Muted}}
         end}
-        b.HandleEvent=function(_,event)
-            if event.Type=='MouseEnter' then v.Hovered=hover;UpdateTooltip(v);return true end
-            if event.Type=='MouseExit' then if v.Hovered==hover then v.Hovered=nil;HideTip(v) end;return true end
-            if event.Type=='ButtonPress' then Send(action);return true end
-            return false
+        local handle=b.HandleEvent
+        b.HandleEvent=function(self,event)
+            if event.Type=='MouseEnter' then v.Hovered=hover;UpdateTooltip(v) end
+            if event.Type=='MouseExit' and v.Hovered==hover then v.Hovered=nil;HideTip(v) end
+            return handle(self,event)
         end
+        UI.Interactive(b)
         return t
     end
     v.Pause=toggle(690,'II','pause');v.Repair=toggle(722,'+','repair')
-    local tip=Group(frame,'Module Tooltip');tip.Depth:Set(200);tip.Width:Set(396);tip.Height:Set(264)
+    local tip=Group(frame,'Module Tooltip');tip.Depth:Set(function() return window.Depth()+120 end);tip.Width:Set(396);tip.Height:Set(264)
     tip:DisableHitTest();v.Tip=tip
-    local tb=Rect(tip,0,0,396,264,accent,0);tb.Height:Set(tip.Height)
-    local ti=Rect(tip,1,1,394,262,'fc101b29',1);ti.Height:Set(function() return tip.Height()-2 end)
+    local tb=UI.FrameSkin(tip)
+    local ti=Rect(tip,12,3,372,2,accent,1)
     v.TipParts={tb,ti}
     v.TipLines={}
     for n=1,22 do v.TipLines[n]=Label(tip,12,12+(n-1)*20,372,n==1 and 16 or 12,C.Text) end
     HideTip(v)
     for _,row in ipairs(state.Rows) do
         local card={Controls={}}
-        local root=Bitmap(p);root:SetSolidColor('00000000');root.Depth:Set(104);root.ModularId=row.Id
+        local root=Bitmap(p);root:SetSolidColor('00000000');root.Depth:Set(function() return p.Depth()+4 end);root.ModularId=row.Id
         card.Root=root
         local hover=Rect(root,-2,-2,64,64,accent,0);card.Hover=hover
-        local icon=Bitmap(root);icon:DisableHitTest();icon.Depth:Set(105);At(icon,root,0,0,60,60);card.Icon=icon
+        local icon=Bitmap(root);icon:DisableHitTest();icon.Depth:Set(function() return root.Depth()+2 end);At(icon,root,0,0,60,60);card.Icon=icon
         local tag=Label(root,4,2,54,9,C.Damage);card.Tag=tag
         local percentage=Label(root,7,22,52,16,C.Text);card.Percentage=percentage
         local badge=Label(root,43,3,20,10,C.Cost);card.Badge=badge
@@ -140,34 +149,37 @@ local function Create(state,id)
                 if not entry or v.State.Upgrading then return true end
                 local right=event.Modifiers and event.Modifiers.Right
                 if right then
-                    if entry.Job then Send('cancel',entry.Job.JobId)
+                    if entry.Job then QueueRequest(v,'cancel',entry.Row,entry.Job)
                     elseif entry.Row.Installed then Send('remove',entry.Row.Id) end
-                elseif event.Modifiers and event.Modifiers.Left and not entry.Row.Installed and not entry.Job and not entry.Row.Reason then Send('install',entry.Row.Id) end
+                elseif event.Modifiers and event.Modifiers.Left and not entry.Row.Installed and not entry.Job and not entry.Row.Reason then QueueRequest(v,'install',entry.Row) end
                 card.Hovered=false;Visible(hover,false)
                 if v.Hovered==card then v.Hovered=nil;HideTip(v) end
                 return true
             end
             return false
         end
+        UI.Interactive(root)
         v.Cards[row.Id]=card;ShowCard(card,false)
     end
     return v
 end
-local function Update()
+Update=function()
     local selection=GetSelectedUnits() or {}
     local unit=table.getn(selection)==1 and selection[1]
     local id=unit and unit:GetEntityId()
     local data=id and UnitData[id]
     local state=data and data.ModularShield
     if not state then
-        if view then view.Tip:Destroy();view.Panel:Destroy();view=nil end
+        if view then view.Tip:Destroy();view.Window:Destroy();view=nil end
         return
     end
     if not view or view.EntityId~=id then
-        if view then view.Tip:Destroy();view.Panel:Destroy() end
+        if view then view.Tip:Destroy();view.Window:Destroy() end
         view=Create(state,id)
     end
-    local v=view;v.State=state
+    local v=view
+    state,v.Pending=Model.Project(state,v.Pending,GetSystemTimeSeconds())
+    v.State=state
     local live=data.ModularShieldLive or {HP=state.Stats.ShieldMaxHP,MaxHP=state.Stats.ShieldMaxHP,Regen=0,Damage=0,Status=''}
     Text(v.Title,(state.Faction or 'UEF')..'  /  MODULAR SHIELD',C.Text)
     Text(v.HP,string.format('HP  %.0f / %.0f',live.HP,live.MaxHP),C.HP)
@@ -193,10 +205,13 @@ local function Update()
     local members,available=Model.Lists(state)
     local memberRows=math.max(1,math.ceil(table.getn(members)/8))
     local upgradeY=158+memberRows*73
-    v.Panel.Height:Set(upgradeY+99)
+    local upgradeRows=math.max(1,math.ceil(table.getn(available)/8))
+    local infoY=upgradeY+upgradeRows*73+8
+    v.Panel.Height:Set(infoY+24)
+    v.Scroll:ScrollTo()
     At(v.Upgrades,v.Panel,16,upgradeY+7)
     At(v.Hint,v.Panel,16,upgradeY+27)
-    At(v.Info,v.Panel,16,upgradeY+69)
+    At(v.Info,v.Panel,16,infoY)
     local visible={}
     local function place(entries,y)
         for index,entry in ipairs(entries) do
@@ -209,7 +224,7 @@ local function Update()
             if card.Texture~=texture then card.Icon:SetTexture(texture);card.Texture=texture end
             local job=entry.Job
             local progress=job and math.min(1,job.PaidWork/job.Quote.Work) or 0
-            Text(card.Percentage,job and string.format('%.0f%%',100*progress) or '',C.Text)
+            Text(card.Percentage,job and (job.Pending and '...' or string.format('%.0f%%',100*progress)) or '',C.Text)
             Text(card.Tag,job and job.Kind=='Remove' and 'REMOVE' or (dormant and 'DORMANT' or ''),C.Damage)
             Text(card.Badge,job and entry.Index>1 and tostring(entry.Index) or '',C.Cost)
             card.Progress.Width:Set(job and 50*progress or 0)
