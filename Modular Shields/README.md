@@ -254,9 +254,9 @@ multiplication for compatibility with FAF's Lua dialect (`^` is XOR there).
 Ground denial returns enemy mobile land/seabed units to their last safe exterior
 position, or chooses a pathable, unoccupied exterior point. It runs every simulation
 tick, accounts for unit size, checks observed swept crossings, and avoids placing a
-unit inside another active hostile barrier. Units inside on activation/radius change
-can leave; after leaving they cannot re-enter. Newly observed enemy teleport/unload
-arrivals inside are ejected. Friends retain access. Naval movement is unaffected.
+unit inside another active hostile barrier. Enemies inside on activation, recharge
+or radius growth are forcibly ejected, as are newly observed teleport/unload
+arrivals inside. If no safe exterior point is available, the next tick retries. Friends retain access. Naval movement is unaffected.
 Low aircraft are blocked by the actual spherical dome, with swept crossings and
 speed-scaled outward displacement at their current flight altitude. Aircraft above
 the dome can fly over it. Ground and air impacts use the same weighted cost/cooldown.

@@ -1,7 +1,6 @@
 MeshBlueprint {
     LODs = {{
-        MeshName = '/effects/entities/Sphere01/Sphere01_lod0.scm',
-        AlbedoName = '/mods/ModularShields/effects/entities/UEFT4Hex/HexSeams.dds',
+        MeshName = '/mods/ModularShields/effects/entities/UEFT4Hex/HexDome_lod0.scm',
         ShaderName = 'ModularHexHitYellow',
         LODCutoff = 1000,
     }},

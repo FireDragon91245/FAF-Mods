@@ -237,7 +237,7 @@ check(target.Stats.ShieldMaxHP==4000 and target.MyShield.HP==350,'Upgrade scales
 check(target.Loadout.Queue[1].PaidWork==100 and target.Loadout.Queue[1].Quote.Mass==100,'Partial job/quote transferred')
 check(target.MyShield.State==target.MyShield.DamageDrainedState and target.MyShield.ModularResumeCharge==7,'Collapsed dome retains remaining recharge delay')
 check(#Transfer.Snapshot(source,false).Queue==0,'Capture/give excludes unfinished work')
--- Ground barrier: grandfather interior units, push back enemies, respect friends.
+-- Ground barrier ejects occupants at activation, growth and recharge.
 h=host();h.BarrierActive=true
 local enemies={}
 function h:GetAIBrain() return {GetUnitsAroundPoint=function() return enemies end} end
@@ -251,15 +251,21 @@ local function ground(id,x,army)
 end
 local insider,outside,friend=ground(30,100),ground(31,125),ground(32,125,1)
 enemies={insider,outside,friend};Ground.Tick(h,R.Config.Barrier)
-check(insider.Position[1]==100,'Units inside at activation may leave')
+check(insider.Position[1]>121,'Units inside at activation are forcibly ejected')
 outside.Position={115,0,100};friend.Position={115,0,100};Ground.Tick(h,R.Config.Barrier)
 check(outside.Position[1]==125 and friend.Position[1]==115,'Enemy is returned outside; friendly units retain access')
 insider.Position={125,0,100};Ground.Tick(h,R.Config.Barrier);insider.Position={115,0,100};Ground.Tick(h,R.Config.Barrier)
-check(insider.Position[1]==125,'Grandfathered unit cannot re-enter after exiting')
+check(insider.Position[1]==125,'Ejected unit cannot re-enter')
 local teleported=ground(33,100);enemies[#enemies+1]=teleported;Ground.Tick(h,R.Config.Barrier)
 check(math.abs(teleported.Position[1]-100)>20,'New transport/teleport arrivals are ejected')
 h.BarrierActive=false;Ground.Tick(h,R.Config.Barrier)
 check(not h.BarrierRecords,'Collapse clears ground restrictions immediately')
+insider.Position={100,0,100};enemies={insider};h.BarrierActive=true
+Ground.Tick(h,R.Config.Barrier)
+check(insider.Position[1]>121,'Reactivation ejects enemies that entered while down')
+insider.Position={130,0,100};h.MyShield.Size=70
+Ground.Tick(h,R.Config.Barrier)
+check(insider.Position[1]>136,'Growth ejects enemies engulfed by the larger dome')
 h=host();h.BarrierActive=true
 local heavy=ground(60,125);heavy.Blueprint.Physics={MaxSpeed=4};heavy.Blueprint.Economy={BuildCostMass=1000}
 enemies={heavy};function h:GetAIBrain() return {GetUnitsAroundPoint=function() return enemies end} end
@@ -299,6 +305,15 @@ tick=tick+15;bomber.Position={140,10,100};Ground.Tick(h,R.Config.Barrier)
 bomber.Position={60,10,100};Ground.Tick(h,R.Config.Barrier)
 check(h.MyShield.Hits==2 and bomber.Position[2]==10,'Swept air crossing catches a bomber that traverses the entire dome between updates')
 Combat.Unregister(h)
+-- Aircraft already engulfed on activation/growth are ejected at their altitude.
+h=host();h.BarrierActive=true
+bomber.Position={100,10,100};enemies={bomber}
+function h:GetAIBrain() return {GetUnitsAroundPoint=function() return enemies end} end
+Ground.Tick(h,R.Config.Barrier)
+check(bomber.Position[1]>134 and bomber.Position[2]==10,'Activation ejects aircraft already inside without changing altitude')
+bomber.Position={130,10,100};h.MyShield.Size=80
+Ground.Tick(h,R.Config.Barrier)
+check(bomber.Position[1]>154 and bomber.Position[2]==10,'Growth ejects engulfed aircraft without changing altitude')
 -- Actual generator activation state machine, including warmup and provider/power loss.
 function ClassUnit(parent) return function(def) return setmetatable(def,{__index=parent}) end end
 State=ClassUnit

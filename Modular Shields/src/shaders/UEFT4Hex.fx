@@ -3,8 +3,7 @@
 struct MODULAR_HEX_VERTEX
 {
     float4 position : POSITION0;
-    float3 grid : TEXCOORD0;
-    float3 weights : TEXCOORD1;
+    float edge : TEXCOORD0;
     float4 material : TEXCOORD2;
     float2 maskDepth : TEXCOORD3;
 };
@@ -25,37 +24,31 @@ MODULAR_HEX_VERTEX ModularHexVS(
     float4 color : COLOR0)
 {
     MODULAR_HEX_VERTEX v = (MODULAR_HEX_VERTEX)0;
-    // Unskinned effect sphere: the instance rows already contain entity scale,
-    // orientation and translation. No bone palette or skinning is needed.
-    float4x4 world = float4x4(float4(row0,0),float4(row1,0),float4(row2,0),float4(row3,1));
-    float4 p = mul(float4(position, 1), world);
-    v.position = mul(p, mul(viewMatrix, projMatrix));
-    float3 n = normalize(mul(normal, (float3x3)world));
-    // Global clock keeps the impact overlay registered to the rotating dome.
-    // 105 seconds per turn. Rotate sampling, never the collision entity.
-    float angle = time * 0.06;
+    // Identity-bone effect mesh. Both overlays and dome use the same rotating
+    // geodesic cells. Entity orientation encodes only the hit direction, so an
+    // oriented overlay never rotates its cell borders away from the main dome.
+    float scale = length(row0);
+    // Engine time is interpolated simulation ticks, wrapped at 36000 ticks.
+    // One revolution per 1200 ticks = 120 seconds at the ideal 10 ticks/second.
+    // 1200 divides the clock's wrap period, so rotation stays continuous there.
+    // Dome and impact overlays share this phase and follow sim speed/pause.
+    float angle = frac(time / 1200.0) * 6.28318530718;
     float s = sin(angle), c = cos(angle);
+    float3 n = normalize(position);
     float3 rotated = float3(c*n.x - s*n.z, n.y, s*n.x + c*n.z);
-    v.grid = rotated * 14;
-    v.weights = abs(rotated);
-    v.weights *= v.weights;
-    v.weights *= v.weights;
-    v.weights *= v.weights;
+    float4 p = float4(rotated * (0.5*scale) + row3, 1);
+    v.position = mul(p, mul(viewMatrix, projMatrix));
+    v.edge = texcoord.x;
     v.material = float4(time - material.x, material.yzw);
-    // Impact entities point their local +Z axis at the actual hit.
-    v.maskDepth = float2(normalize(position).z, p.y - surfaceElevation);
+    v.maskDepth = float2(dot(rotated, normalize(row2)), p.y - surfaceElevation);
     return v;
 }
 
 float ModularHexLines(MODULAR_HEX_VERTEX v)
 {
-    // Three projections avoid the stretched cells at a sphere's UV poles.
-    float3 w = v.weights / max(dot(v.weights, float3(1,1,1)), 0.001);
-    float2 aspect = float2(0.57735027,0.33333333);
-    float x = tex2D(albedoSampler, v.grid.yz*aspect).r;
-    float y = tex2D(albedoSampler, v.grid.xz*aspect).r;
-    float z = tex2D(albedoSampler, v.grid.xy*aspect).r;
-    return dot(float3(x,y,z), w);
+    // Each cell fan interpolates 0 at its center and 1 at the shared border.
+    // No spherical UVs, periodic sampling, projection blends or wrap seam.
+    return smoothstep(0.94, 0.985, v.edge);
 }
 
 float4 ModularHexDomePS(MODULAR_HEX_VERTEX v) : COLOR0
@@ -91,7 +84,7 @@ technique ModularHexDome
 {
     pass P0
     {
-        AlphaState(AlphaBlend_SrcAlpha_InvSrcAlpha_Write_RGBA)
+        AlphaState(AlphaBlend_SrcAlpha_InvSrcAlpha_Write_RGB)
         RasterizerState(Rasterizer_Cull_CW)
         DepthState(Depth_Enable_LessEqual_Write_None)
         VertexShader = compile vs_2_0 ModularHexVS();
@@ -104,7 +97,7 @@ technique ModularHexHitBlue
 {
     pass P0
     {
-        AlphaState(AlphaBlend_SrcAlpha_One_Write_RGBA)
+        AlphaState(AlphaBlend_SrcAlpha_One_Write_RGB)
         RasterizerState(Rasterizer_Cull_CW)
         DepthState(Depth_Enable_LessEqual_Write_None)
         VertexShader = compile vs_2_0 ModularHexVS();
@@ -116,7 +109,7 @@ technique ModularHexHitYellow
 {
     pass P0
     {
-        AlphaState(AlphaBlend_SrcAlpha_One_Write_RGBA)
+        AlphaState(AlphaBlend_SrcAlpha_One_Write_RGB)
         RasterizerState(Rasterizer_Cull_CW)
         DepthState(Depth_Enable_LessEqual_Write_None)
         VertexShader = compile vs_2_0 ModularHexVS();
@@ -128,7 +121,7 @@ technique ModularHexHitRed
 {
     pass P0
     {
-        AlphaState(AlphaBlend_SrcAlpha_One_Write_RGBA)
+        AlphaState(AlphaBlend_SrcAlpha_One_Write_RGB)
         RasterizerState(Rasterizer_Cull_CW)
         DepthState(Depth_Enable_LessEqual_Write_None)
         VertexShader = compile vs_2_0 ModularHexVS();

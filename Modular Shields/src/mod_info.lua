@@ -1,6 +1,6 @@
 name = 'Modular Shields'
 uid = 'bf55b8d0-2026-4115-9000-000000000001'
-version = 31
+version = 35
 description = 'Modular T3/T4 shields: paid assisted installations, repairs, aircraft deflection, nuclear containment and legendary ground/air denial.'
 author = 'Rick'
 selectable = true

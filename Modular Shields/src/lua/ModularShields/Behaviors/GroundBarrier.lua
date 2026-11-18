@@ -70,7 +70,6 @@ end
 local function Tick(host,config)
     if not host.BarrierActive then host.BarrierRecords=nil;return end
     if host.BarrierRadius~=host.MyShield.Size/2 then host.BarrierRecords=nil;host.BarrierRadius=host.MyShield.Size/2 end
-    local initial=not host.BarrierRecords
     host.BarrierRecords=host.BarrierRecords or {}
     local center=host.MyShield:GetPosition()
     local radius=host.MyShield.Size/2
@@ -85,12 +84,11 @@ local function Tick(host,config)
             local record=host.BarrierRecords[id]
             local inside=DistanceSquared(p,center,Air(u))<(radius+Radius(u))*(radius+Radius(u))
             if not record then
-                record={InsideAllowed=initial and inside,Position=G.Copy(p)}
+                record={Position=G.Copy(p)}
                 host.BarrierRecords[id]=record
             end
-            if not inside then record.InsideAllowed=false end
-            local crossed=not record.InsideAllowed and G.Entry(record.Position,p,center,radius+Radius(u),not Air(u))
-            if (inside and not record.InsideAllowed) or crossed then
+            local crossed=G.Entry(record.Position,p,center,radius+Radius(u),not Air(u))
+            if inside or crossed then
                 if Push(u,record,center,radius,config) then
                     Charge(host,u,p,center,config)
                     if host.MyShield:GetHealth()<=0 or host.MyShield.DisallowCollisions or not host.MyShield:IsUp() then

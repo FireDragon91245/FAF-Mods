@@ -1,24 +1,32 @@
-# UEF T4 hex dome prototype — v19
+# UEF T4 hex dome prototype — v35
 
 Only `mdeb4401` uses this experiment. Other factions, UEF T3 and stock shields
 retain their existing appearance. The module system and protection rules are unchanged.
 
 ## Appearance
 
-- A transparent blue field with rotating hexagonal seams; one turn takes about 105 seconds.
+- A transparent blue field with rotating hexagonal seams. One turn takes 1200
+  simulation ticks: about two minutes at the ideal 10 ticks/second. Rotation follows
+  simulation speed and freezes when paused. The engine supplies interpolated ticks
+  modulo 36000; the 1200-tick period keeps rotation continuous across that wrap.
 - Health continuously blends red to yellow between 15–35%, holds yellow through 55%,
   then blends yellow to blue between 55–75%. Above 75% it is blue.
 - Surface impacts illuminate a local neighborhood of seams and cell interiors for
   0.85 seconds. Impact colours use blue above 65%, yellow at 30–65%, red at or below 30%.
-- At most eight impact overlays exist per dome. Their orientation follows the hit,
-  while their world-aligned pattern follows the same clock as the main dome.
-- Three strongly weighted planar projections avoid polar UV stretching. Their
-  transition zones can show blended grids; this is a prototype art tradeoff.
+- Up to 32 impact overlays exist per dome. At saturation, the newest hit replaces
+  the oldest flash instead of being dropped. Their orientation follows the hit,
+  while their geodesic pattern follows the same clock as the main dome.
+- A closed geodesic mesh carries 630 hexagons and the 12 pentagons needed to close
+  a sphere. Shared cell edges replace projected textures: no wrap seam, overlapping
+  grids, or polar texture stretching. Cell sizes vary slightly over the sphere.
+- The dome has no depth-writing ShieldFill companion. Both the dome and impact
+  overlays blend RGB without modifying scene alpha or depth, preserving shields
+  behind and within the custom dome.
 
 ## Install / rebuild
 
 Close any running Forged Alliance game and run `./build.ps1 -Install`.
-This generates the DDS mask and meshes, compiles the production HLSL functions
+This generates the geodesic SCM and mesh blueprints, compiles the production HLSL functions
 with Windows D3DCompiler against Shader Model 2, runs tests and bundles the mod.
 The source install also installs the sibling **FireDragon Mod Loader** dependency.
 For release packages, install that loader once with its `install.cmd`, then install
@@ -78,7 +86,9 @@ Also verify with a normal built generator and actual enemy fire:
 2. Fire at the front, sides and top. Bright seams should line up with the main dome;
    the illuminated neighborhood should follow the hit, fade, and remain bounded
    under rapid fire. Check hits from both projectiles and beams.
-3. Let HP cross both colour transitions and regenerate back to blue.
+3. Place a vanilla shield inside/behind the custom dome and check it remains
+   visible through cell interiors. Inspect the entire circumference and pole for
+   a wrap seam or blended grids. Let HP cross both colour transitions and regenerate back to blue.
 4. Collapse, toggle, drain energy, and recharge. No visible dome while down; the
    custom appearance returns without an HP reset or changed recharge time.
 5. Install Range/Power/Regen; test T3-to-T4 upgrade, capture, death and reclaim.

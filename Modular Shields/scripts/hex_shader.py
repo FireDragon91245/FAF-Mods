@@ -9,7 +9,6 @@ import hashlib
 import json
 import math
 import zipfile
-from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 BEGIN = b'\n// BEGIN MODULAR_SHIELDS_UEF_T4_HEX\n'
@@ -68,35 +67,13 @@ def compile_shaders(data):
 def assets():
     out = ROOT/'src/effects/entities/UEFT4Hex'
     out.mkdir(parents=True,exist_ok=True)
-    # A tile containing two rows of pointy hexagons, exactly periodic in U/V.
-    # Nearest-center distance produces continuous, antialiased seam masks.
-    width,height = 512,512
-    image = Image.new('RGBA',(width,height))
-    pixels = image.load()
-    sqrt3 = math.sqrt(3)
-    for py in range(height):
-        y = (py+0.5)/height*3
-        for px in range(width):
-            x = (px+0.5)/width*sqrt3
-            # Distances from the centers of the staggered hex lattice.
-            edge = 10
-            for row in range(-1,4):
-                cy = row*1.5
-                cx = (row%2)*sqrt3/2
-                dx = abs((x-cx+sqrt3/2)%sqrt3-sqrt3/2)
-                dy = abs(y-cy)
-                d = max(dx*0.5 + dy*sqrt3/2,dx)-sqrt3/2
-                edge = min(edge,abs(d)) if d <= 0.01 else edge
-            strength = max(0,min(1,(0.045-edge)/0.023))
-            value = round(strength*255)
-            pixels[px,py] = (value,value,value,255)
-    image.save(out/'HexSeams.dds')
+    from hex_mesh import generate
+    generate(out/'HexDome_lod0.scm')
     for name,shader in [('Dome','ModularHexDome'),('HitBlue','ModularHexHitBlue'),
                         ('HitYellow','ModularHexHitYellow'),('HitRed','ModularHexHitRed')]:
         (out/f'{name}_mesh.bp').write_text('''MeshBlueprint {
     LODs = {{
-        MeshName = '/effects/entities/Sphere01/Sphere01_lod0.scm',
-        AlbedoName = '/mods/ModularShields/effects/entities/UEFT4Hex/HexSeams.dds',
+        MeshName = '/mods/ModularShields/effects/entities/UEFT4Hex/HexDome_lod0.scm',
         ShaderName = '%s',
         LODCutoff = 1000,
     }},
@@ -104,7 +81,7 @@ def assets():
     StraddleWater = true,
 }
 ''' % (shader,1000 if name=='Dome' else 1001),encoding='utf-8')
-    print('Generated hex seam DDS and four mesh blueprints')
+    print('Generated geodesic dome and four mesh blueprints')
 
 
 def main():
