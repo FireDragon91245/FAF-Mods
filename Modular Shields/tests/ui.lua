@@ -36,12 +36,15 @@ local function control(kind,parent,name)
     function c:SetUV(...) self.UV={...} end
     function c:SetAlpha(v) self.Alpha=v end
     function c:GetStringAdvance(s) return #s*7 end
+    c.TextAdvance=lazy(0);c.FontAscent=lazy(11);c.FontDescent=lazy(3)
     c.Depth=lazy(function() return parent and parent.Depth()+1 or 0 end)
     if parent then parent.Children[#parent.Children+1]=c end
     function c:DisableHitTest() self.NoHit=true end
     function c:EnableHitTest() self.NoHit=false end
     function c:SetClipToWidth(v) self.Clip=v end
-    function c:SetText(v) self.Text=v end
+    function c:SetCenteredHorizontally(v) self.CenteredHorizontally=v end
+    function c:SetCenteredVertically(v) self.CenteredVertically=v end
+    function c:SetText(v) self.Text=v;self.TextAdvance:Set(#v*7) end
     function c:SetSolidColor(v) self.Color=v end
     function c:SetTexture(v) self.Texture=v end
     function c:SetColor(v) self.Color=v end
@@ -60,7 +63,7 @@ local layout={ScaleNumber=function(v) return v end,InvScaleNumber=function(v) re
 function layout.AtLeftTopIn(c,parent,x,y) c.Left:Set(function() return parent.Left()+x end);c.Top:Set(function() return parent.Top()+y end) end
 function layout.AtRightTopIn(c,parent,x,y) c.Left:Set(function() return parent.Left()+parent.Width()-c.Width()-x end);c.Top:Set(function() return parent.Top()+y end) end
 function layout.FillParent(c,parent) c.Left:Set(function() return parent.Left() end);c.Top:Set(function() return parent.Top() end);c.Width:Set(function() return parent.Width() end);c.Height:Set(function() return parent.Height() end) end
-local UI={bodyFont='body',SkinnableFile=function(p) return '/skin'..p end}
+local UI={bodyFont='body',buttonFont='button',SkinnableFile=function(p) return '/skin'..p end}
 function UI.CreateText(parent,label) local t=control('text',parent);t:SetText(label);return t end
 function UI.CreateButtonStd(parent,texture,label)
     assert(texture=='/scx_menu/small-btn/small','Use known native button textures')
@@ -185,6 +188,14 @@ local window=find(function(c) return c.Name=='Modular Shield Window' end)
 local dock=card('power_1').Parent
 local tip=find(function(c) return c.Name=='Module Tooltip' end)
 check(window.Width()==780 and window.MinWidth==420 and window.Resizable,'Shield menu uses a resizable shared window with minimum size')
+check(window.Title.FDText=='CYBRAN / Modular Shield' and not label('Modular Shield Upgrades'),'faction title appears in the window header')
+for _,symbol in ipairs({'II','+'}) do
+    local caption=assert(label(symbol))
+    local button=caption.Parent.Parent
+    check(button.FDParent==window.TitleBar and button.Top()==window.Top()+3,'pause and repair controls live in the window toolbar')
+    check(caption.Left()==math.floor(button.Left()+(button.Width()-caption.Width())/2) and caption.Top()==math.floor(button.Top()+(button.Height()-caption.Height())/2),'pause and repair captions stay centered')
+end
+check(label('HP  8000 / 10000').Top()==dock.Top()+5,'shield information starts at the top of the content')
 check(label('HP  8000 / 10000').Color==Model.Colors.HP,'Live current/max HP is blue')
 check(label('+100 HP/s  Regenerating').Color==Model.Colors.Regen,'Live regeneration is green')
 check(label('-240 HP/s  (5s avg)').Color==Model.Colors.Damage,'Rolling incoming damage is red')
@@ -192,22 +203,22 @@ check(label('-240 HP/s  (5s avg)').Color==Model.Colors.Damage,'Rolling incoming 
 delayCallbacks=true
 local first=card('power_1')
 first:HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
-check(#state.Queue==0 and first.Top()==dock.Top()+158 and not card('power_2').Hidden,'click moves pending upgrade immediately without a simulation reply')
+check(#state.Queue==0 and first.Top()==dock.Top()+128 and not card('power_2').Hidden,'click moves pending upgrade immediately without a simulation reply')
 check(label('...') and not label('...').Parent.Hidden,'pending installation has immediate feedback')
 card('power_2'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 card('range_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 check(#delayed==3 and not card('power_3').Hidden,'rapid clicks queue prerequisites and another family without waiting')
 Panel.Update();Panel.Update()
-check(first.Top()==dock.Top()+158 and #state.Queue==0,'stale snapshots preserve pending entries')
+check(first.Top()==dock.Top()+128 and #state.Queue==0,'stale snapshots preserve pending entries')
 for _,request in ipairs(delayed) do deliver(request) end
 delayed={};delayCallbacks=false;Panel.Update()
 check(#state.Queue==3 and label('0%'),'acknowledgements replace pending indicators with real jobs')
 delayCallbacks=true
 first:HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
-check(#state.Queue==3 and first.Top()>dock.Top()+158 and card('power_2').Hidden,'cancel immediately removes the target and dependent queue without a sim reply')
-check(card('range_1').Top()==dock.Top()+158,'cancel keeps unrelated queued upgrades')
+check(#state.Queue==3 and first.Top()>dock.Top()+128 and card('power_2').Hidden,'cancel immediately removes the target and dependent queue without a sim reply')
+check(card('range_1').Top()==dock.Top()+128,'cancel keeps unrelated queued upgrades')
 Panel.Update();Panel.Update()
-check(first.Top()>dock.Top()+158,'stale snapshots do not restore a cancelled job')
+check(first.Top()>dock.Top()+128,'stale snapshots do not restore a cancelled job')
 for _,request in ipairs(delayed) do deliver(request) end
 delayed={};delayCallbacks=false;Panel.Update()
 check(#state.Queue==1 and state.Queue[1].ModuleId=='range_1','cancel acknowledgement matches the projected queue')
@@ -218,36 +229,36 @@ card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 local rejected=delayed[1]
 owned.Reject=true;deliver(rejected);owned.Reject=false
 state.Queue={};sync();Panel.Update()
-check(card('power_1').Top()>dock.Top()+158 and card('power_2').Hidden,'rejected request returns to upgrades and hides its dependent level')
+check(card('power_1').Top()>dock.Top()+128 and card('power_2').Hidden,'rejected request returns to upgrades and hides its dependent level')
 delayed={}
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 clock=6;Panel.Update()
-check(card('power_1').Top()>dock.Top()+158,'unanswered request times out without a stuck module')
+check(card('power_1').Top()>dock.Top()+128,'unanswered request times out without a stuck module')
 delayed={};clock=7
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 card('power_2'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
 check(#delayed==3 and delayed[3].value.CancelRequestId==requestKey(delayed[1]),'pending install can be cancelled using its request token before it has a job id')
-check(card('power_1').Top()>dock.Top()+158 and card('power_2').Hidden,'pre-ack cancellation removes pending dependents immediately')
+check(card('power_1').Top()>dock.Top()+128 and card('power_2').Hidden,'pre-ack cancellation removes pending dependents immediately')
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 local replacementToken=requestKey(delayed[4])
 local originalInstall=table.remove(delayed,1)
 deliver(originalInstall);Panel.Update()
-check(#state.Queue==1 and card('power_1').Top()==dock.Top()+158,'old install acknowledgement does not consume a replacement install request')
+check(#state.Queue==1 and card('power_1').Top()==dock.Top()+128,'old install acknowledgement does not consume a replacement install request')
 for _,request in ipairs(delayed) do deliver(request) end
 delayed={};Panel.Update()
 check(#state.Queue==1 and state.Queue[1].ModuleId=='power_1' and state.Queue[1].UIRequestId==replacementToken,
     'install-cancel-reinstall processes correctly in send order: '..tostring(#state.Queue)..' / '..tostring(state.Queue[1] and state.Queue[1].UIRequestId)..' / '..replacementToken)
 -- A rejected cancel must restore the original job after its explicit response.
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
-check(card('power_1').Top()>dock.Top()+158,'confirmed job cancellation projects immediately')
+check(card('power_1').Top()>dock.Top()+128,'confirmed job cancellation projects immediately')
 local rejectedCancel=delayed[1]
 owned.RejectCancel=true;deliver(rejectedCancel);owned.RejectCancel=false;sync();Panel.Update()
-check(card('power_1').Top()==dock.Top()+158 and #state.Queue==1,'rejected cancellation restores authoritative job')
+check(card('power_1').Top()==dock.Top()+128 and #state.Queue==1,'rejected cancellation restores authoritative job')
 delayed={}
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
 clock=13;Panel.Update()
-check(card('power_1').Top()==dock.Top()+158,'unanswered cancellation times out without a hidden job')
+check(card('power_1').Top()==dock.Top()+128,'unanswered cancellation times out without a hidden job')
 state.Queue={};state.Revision=state.Revision+1;sync();Panel.Update()
 delayed={};delayCallbacks=false;sent={};clock=14
 local power1=card('power_1')
@@ -258,7 +269,7 @@ hover(power1)
 check(not tip.Hidden and label('+2500 maximum shield HP').Color==Model.Colors.HP,'Native hover popup shows capacity change in blue')
 click(power1)
 check(secureCalled and sent[1].value.Action=='install' and #state.Queue==1,'Image click reaches the secured install callback')
-check(power1.Top()==dock.Top()+158 and image.Texture:find('_dim.dds',1,true),'Queued icon moves to modules row and is grayed out')
+check(power1.Top()==dock.Top()+128 and image.Texture:find('_dim.dds',1,true),'Queued icon moves to modules row and is grayed out')
 check(label('0%') and not label('0%').Hidden,'Pending icon overlays installation percentage')
 check(not card('power_2').Hidden,'Queuing a prerequisite exposes the next upgrade')
 local job=state.Queue[1];job.PaidWork=job.Quote.Work*.5;job.State='Building'
@@ -266,12 +277,12 @@ sync();Panel.Update()
 check(label('50%') and not label('50%').Hidden,'Paid progress refreshes the image overlay in place')
 click(card('power_2'))
 click(power1,true)
-check(#state.Queue==0 and power1.Top()==dock.Top()+231 and card('power_2').Hidden,'Right-click cancels pending module and dependent queue')
+check(#state.Queue==0 and power1.Top()==dock.Top()+201 and card('power_2').Hidden,'Right-click cancels pending module and dependent queue')
 check(not exchangeUI.GetState(Messages.Status,1001).Job and #exchangeUI.GetState(Messages.Status,1001).Queue==0,'Snapshot merge clears cancelled job and queue tails')
 check(UnitData[1001].OtherMod.Keep,'Module snapshot leaves unrelated unit data intact')
 click(power1);job=state.Queue[1];job.PaidWork=job.Quote.Work
 assert(not R.Core.Complete(state,job,R.Registry,R.Config));sync();Panel.Update()
-check(power1.Top()==dock.Top()+158 and not image.Texture:find('_dim',1,true),'Completed module remains equipped with full-color icon')
+check(power1.Top()==dock.Top()+128 and not image.Texture:find('_dim',1,true),'Completed module remains equipped with full-color icon')
 hover(power1)
 check(label('-2500 maximum shield HP on removal').Color==Model.Colors.HP,'Installed-module tooltip previews the actual loss on removal in blue')
 click(power1,true)
@@ -287,7 +298,7 @@ delayed={};delayCallbacks=false;Panel.Update()
 check(state.Installed.power_1 and #state.Queue==0,'Right-clicking removal cancels it and keeps installed module')
 click(power1,true);job=state.Queue[1];job.PaidWork=job.Quote.Work
 assert(not R.Core.Complete(state,job,R.Registry,R.Config));sync();Panel.Update()
-check(not state.Installed.power_1 and power1.Top()==dock.Top()+231,'Finished removal returns icon to available upgrades')
+check(not state.Installed.power_1 and power1.Top()==dock.Top()+201,'Finished removal returns icon to available upgrades')
 hover(card('deflector'))
 check(label('Deflects crashing aircraft and selected').Color==Model.Colors.Special,'Special effect hover descriptions are orange')
 card('deflector'):HandleEvent({Type='MouseExit'})
@@ -306,7 +317,7 @@ for _,id in ipairs({'power_1','power_2','range_1','regen_1','repair_1','deflecto
     state.Installed[id]={Id=id,Quote=R.Core.Quote(state,id,R.Registry,R.Config)}
 end
 sync();Panel.Update()
-check(dock.Height()>=403 and card('impenetrable').Top()==dock.Top()+231,'Storage-supported modules beyond eight wrap into another equipped row')
+check(dock.Height()>=373 and card('impenetrable').Top()==dock.Top()+201,'Storage-supported modules beyond eight wrap into another equipped row')
 local before=#controls
 for n=1,20 do Panel.Update() end
 check(#controls==before,'Status updates preserve image/control identity')
@@ -314,6 +325,8 @@ check(#controls==before,'Status updates preserve image/control identity')
 window.Left:Set(window.Left()+123);window.Top:Set(window.Top()+47);window.Height:Set(260)
 local viewport=dock.Parent.FDScrollOwner or dock.Parent
 viewport:ScrollTo(80,40)
+local pauseButton=assert(label('II')).Parent.Parent
+check(pauseButton.Left()==window.Left()+window.Width()-84 and pauseButton.Top()==window.Top()+3,'title-bar tools stay beside Close when the window moves or content scrolls')
 local root=card('power_1')
 root.FDVisual:Hide() -- root surface is decorative; its separate native hit area remains active
 check(root.FDHit.AlphaHit==false,'Module hit regions ignore bitmap alpha')

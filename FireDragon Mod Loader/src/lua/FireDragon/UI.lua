@@ -21,10 +21,20 @@ end
 -- respect the owning hierarchy instead of deciding visibility from geometry alone.
 local function visible(c)
     while c do
-        if c:IsHidden() then return false end
+        if c.FDHidden or c:IsHidden() then return false end
         c=c.FDParent
     end
     return true
+end
+-- Maui Show() clears hidden state throughout a subtree, including inactive tab
+-- pages. Preserve each component's explicit visibility across ancestor changes.
+local function restoreVisibility(c)
+    for _,child in ipairs(c.FDChildren) do
+        if not child.FDDestroyed then
+            if child.FDHidden then child:Hide() else restoreVisibility(child) end
+        end
+    end
+    if c.FDRefresh then c.FDRefresh() end
 end
 local function bounds(c) return c.Left(),c.Top(),c.Left()+c.Width(),c.Top()+c.Height() end
 local function clip(c)
@@ -55,6 +65,15 @@ local function node(parent,o)
     local c=Group(parent,o.name or 'FireDragon UI')
     c:DisableHitTest()
     c.FDParent=parent;c.FDChildren={};c.FDClip=o.clip==true
+    local hide,show,destroy=c.Hide,c.Show,c.Destroy
+    function c:Hide() self.FDHidden=true;return hide(self) end
+    function c:Destroy() self.FDDestroyed=true;return destroy(self) end
+    function c:Show()
+        self.FDHidden=false
+        local result=show(self)
+        restoreVisibility(self)
+        return result
+    end
     if parent.FDChildren then table.insert(parent.FDChildren,c) end
     UI.At(c,parent,o.x,o.y,o.width or 100,o.height or 24)
     c.Depth:Set(function() return parent.Depth()+(o.depth or 2) end)
@@ -69,6 +88,7 @@ local function visual(c,kind,o)
     if kind=='text' then
         v=UIUtil.CreateText(c,o.text or '',o.size or 13,o.font or UIUtil.bodyFont)
         v:SetColor(o.color or UI.Theme.Text);v:SetClipToWidth(true)
+        if o.centered then v:SetCenteredHorizontally(true);v:SetCenteredVertically(true) end
         c.SetText=function(self,s)
             self.FDText=s;self.FDRenderedText=s;v:SetText(s)
             if self.FDRefresh then self.FDRefresh() end
@@ -103,7 +123,9 @@ local function visual(c,kind,o)
         else
             if r<=l or b<=t then v:Hide() else v:Show() end
             local w,h=math.max(1,c.Width()),math.max(1,c.Height())
-            v:SetUV((l-c.Left())/w,(t-c.Top())/h,(r-c.Left())/w,(b-c.Top())/h)
+            local uv=o.uv or {0,0,1,1}
+            v:SetUV(uv[1]+(l-c.Left())/w*(uv[3]-uv[1]),uv[2]+(t-c.Top())/h*(uv[4]-uv[2]),
+                uv[1]+(r-c.Left())/w*(uv[3]-uv[1]),uv[2]+(b-c.Top())/h*(uv[4]-uv[2]))
         end
     end
     c.FDVisual=v;c.FDRefresh=refresh
@@ -155,15 +177,29 @@ function UI.Button(parent,o)
         down=skin('/scx_menu/small-btn/small_btn_down.dds'),
         disabled=skin('/scx_menu/small-btn/small_btn_dis.dds'),
     }
-    local c=UI.Icon(parent,{x=o.x,y=o.y,width=o.width,height=o.height,texture=textures.up})
-    c.Label=UI.Label(c,{x=6,y=function() return math.max(0,(c.Height()-18)/2) end,width=function() return math.max(0,c.Width()-12) end,height=18,text=o.text})
+    -- The stock 200x72 sprite has a large transparent margin. Exclude it so
+    -- the visible button, its hit surface and its centered caption agree.
+    local c=UI.Icon(parent,{x=o.x,y=o.y,width=o.width,height=o.height,texture=textures.up,
+        uv=o.uv or (not o.textures and {8/200,14/72,192/200,60/72} or nil)})
+    c.Label=UI.Label(c,{text=o.text,size=o.size or 14,font=o.font or UIUtil.buttonFont})
+    local caption=c.Label;local text=caption.FDVisual
+    text:SetDropShadow(false)
+    -- Use the same measured, pixel-aligned positioning as native Maui buttons.
+    -- Centering a glyph inside a stretched text box can land it between pixels.
+    caption.Width:Set(function() return math.ceil(text.TextAdvance()) end)
+    caption.Height:Set(function() return math.floor(text.FontAscent()+text.FontDescent()) end)
+    caption.Left:Set(function() return math.floor(c.Left()+(c.Width()-caption.Width())/2) end)
+    caption.Top:Set(function() return math.floor(c.Top()+(c.Height()-caption.Height())/2) end)
+    c.TextColor=o.textColor or UI.Theme.Text
     c.OnClick=o.onClick
     function c:UpdateState()
         local state=not self.FDEnabled and 'disabled' or ((self.Pressed or self.Selected) and 'down' or (self.Hovered and 'over' or 'up'))
         self:SetTexture(textures[state] or textures.up)
-        self.Label:SetColor(self.FDEnabled and UI.Theme.Text or UI.Theme.Muted)
+        self.Label:SetColor(state=='disabled' and UI.Theme.Muted or
+            ((state=='over' or state=='down') and 'ff000000' or self.TextColor))
     end
     function c:SetSelected(selected) self.Selected=selected==true;self:UpdateState() end
+    function c:SetTextColor(color) self.TextColor=color;self:UpdateState() end
     c.HandleEvent=function(self,e)
         if e.Type=='MouseEnter' then self.Hovered=true;self:UpdateState();return true end
         if e.Type=='MouseExit' then self.Hovered=false;self:UpdateState();return true end
@@ -464,10 +500,13 @@ function UI.Scroll(parent,o)
     end
     local function scrollbar(horizontal)
         local track=UI.Rect(c,{depth=30,color=UI.Theme.Border})
-        if horizontal then UI.At(track,c,0,function() return c.Viewport.Height() end,function() return c.Viewport.Width() end,thickness)
+        if horizontal then
+            UI.At(track,c,0,function() return c.Viewport.Height() end,function() return c.Viewport.Width() end,thickness)
+            track:SetTexture('/mods/FireDragonModLoader/textures/ui/scrollbar/horizontal-back.dds')
         else UI.At(track,c,function() return c.Viewport.Width() end,0,thickness,function() return c.Viewport.Height() end);track:SetTexture(skin('/SCROLLBAR_VERT/back_scr_mid.dds')) end
         local thumb=UI.Rect(track,{color=UI.Theme.Muted})
-        if not horizontal then thumb:SetTexture(skin('/SCROLLBAR_VERT/bar-mid_scr_up.dds')) end
+        if horizontal then thumb:SetTexture('/mods/FireDragonModLoader/textures/ui/scrollbar/horizontal-thumb.dds')
+        else thumb:SetTexture(skin('/SCROLLBAR_VERT/bar-mid_scr_up.dds')) end
         local function length() return horizontal and track.Width() or track.Height() end
         local function viewport() return horizontal and c.Viewport.Width() or c.Viewport.Height() end
         local function content() return horizontal and c.Content.Width() or c.Content.Height() end
@@ -511,7 +550,8 @@ function UI.Scroll(parent,o)
 end
 function UI.Tabs(parent,o)
     o=o or {};local c=UI.Panel(parent,o);c.Pages={};c.Buttons={}
-    c.Body=UI.Panel(c,{y=30,width=function() return c.Width() end,height=function() return math.max(0,c.Height()-30) end,clip=true})
+    local tabHeight=o.tabHeight or 32
+    c.Body=UI.Panel(c,{y=tabHeight+4,width=function() return c.Width() end,height=function() return math.max(0,c.Height()-tabHeight-4) end,clip=true})
     function c:Select(id)
         assert(self.Pages[id],'Unknown tab: '..tostring(id));self.Selected=id
         for key,page in pairs(self.Pages) do
@@ -520,12 +560,21 @@ function UI.Tabs(parent,o)
         end
         if o.onSelect then o.onSelect(id) end
     end
-    function c:Add(id,title)
+    function c:LayoutButtons()
+        for index,id in ipairs(self.Order) do
+            local previous=self.Buttons[self.Order[index-1]]
+            self.Buttons[id].Left:Set(function() return previous and previous.Right()+4 or self.Left() end)
+        end
+    end
+    function c:Add(id,title,options)
+        options=options or {}
         assert(not self.Pages[id],'Duplicate tab')
-        local index=count(self.Order or {});self.Order=self.Order or {};table.insert(self.Order,id)
+        self.Order=self.Order or {};table.insert(self.Order,id)
         local page=UI.Panel(self.Body,{clip=true});UI.Fill(page,self.Body)
         self.Pages[id]=page
-        self.Buttons[id]=UI.Button(self,{x=index*(o.tabWidth or 136),width=(o.tabWidth or 136)-4,height=26,text=title,onClick=function() self:Select(id) end})
+        local button=UI.Button(self,{height=tabHeight,text=title,onClick=function() self:Select(id) end})
+        button.Width:Set(options.width or (o.tabWidth and o.tabWidth-4) or function() return math.max(64,button.Label.Width()+40) end)
+        self.Buttons[id]=button;self:LayoutButtons()
         if not self.Selected then self:Select(id) else page:Hide() end
         return page
     end
@@ -534,10 +583,7 @@ function UI.Tabs(parent,o)
         self.Pages[id]:Destroy();self.Buttons[id]:Destroy()
         self.Pages[id]=nil;self.Buttons[id]=nil
         for index,key in ipairs(self.Order) do if key==id then table.remove(self.Order,index);break end end
-        for index,key in ipairs(self.Order) do
-            local offset=(index-1)*(o.tabWidth or 136)
-            self.Buttons[key].Left:Set(function() return self.Left()+offset end)
-        end
+        self:LayoutButtons()
         if self.Selected==id then self.Selected=nil;if self.Order[1] then self:Select(self.Order[1]) end end
         return true
     end

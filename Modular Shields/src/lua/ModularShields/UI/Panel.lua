@@ -67,9 +67,9 @@ local function UpdateTooltip(v)
 end
 local function Create(state,id)
     local frame=GetFrame(0)
-    local window=UI.Window(frame,{name='Modular Shield Window',title='Modular Shield Upgrades',
+    local window=UI.Window(frame,{name='Modular Shield Window',title=(state.Faction or 'UEF')..' / Modular Shield',
         prefKey='FireDragon_ModularShields_Window',x=(frame.Width()-780)/2,y=math.max(8,frame.Height()-650),width=780,height=450,minWidth=420,minHeight=260})
-    local scroll=UI.Scroll(window.Client,{contentWidth=760,contentHeight=403});UI.Fill(scroll,window.Client,6)
+    local scroll=UI.Scroll(window.Client,{contentWidth=760,contentHeight=373});UI.Fill(scroll,window.Client,6)
     local p=scroll.Content
     local v={Panel=p,Window=window,Scroll=scroll,EntityId=id,State=state,Cards={},Pending={},Actions={}}
     scroll.OnScroll=function()
@@ -80,27 +80,23 @@ local function Create(state,id)
     window.OnHide=function(self,hidden) onHide(self,hidden);if hidden and v.Tip then HideTip(v) end end
     local accents={UEF='ff69b8fa',AEON='ff74e4bb',CYBRAN='fff67b83',SERAPHIM='ffefca78'}
     local accent=accents[state.Faction] or accents.UEF
-    local stripe=Rect(p,1,1,758,3,accent,2);stripe.Width:Set(function() return p.Width()-2 end)
-    local divider=Rect(p,14,146,732,1,'ff263c4c',2);divider.Width:Set(function() return p.Width()-28 end)
-    v.Title=Label(p,16,10,490,14,C.Text)
-    v.HP=Label(p,16,35,270,17,C.HP)
-    v.Regen=Label(p,296,36,210,15,C.Regen)
-    v.Damage=Label(p,518,36,224,15,C.Damage)
+    v.Title=window.Title
+    v.HP=Label(p,16,5,270,17,C.HP)
+    v.Regen=Label(p,296,6,210,15,C.Regen)
+    v.Damage=Label(p,518,6,224,15,C.Damage)
     v.HPSources={};v.RegenSources={}
     for n=1,3 do
-        v.HPSources[n]=Label(p,16,63+(n-1)*20,270,12,C.HP)
-        v.RegenSources[n]=Label(p,296,63+(n-1)*20,446,12,C.Regen)
+        v.HPSources[n]=Label(p,16,33+(n-1)*20,270,12,C.HP)
+        v.RegenSources[n]=Label(p,296,33+(n-1)*20,446,12,C.Regen)
     end
-    v.Neighbors=Label(p,16,128,728,11,C.Cost)
-    v.Modules=Label(p,16,163,104,12,C.Muted);Text(v.Modules,'MODULES')
-    v.Slots=Label(p,16,182,108,12,C.Text)
-    v.Upgrades=Label(p,16,158,108,12,C.Muted);Text(v.Upgrades,'UPGRADES')
-    v.Hint=Label(p,16,178,108,10,C.Muted);Text(v.Hint,'Click to fit')
-    v.Info=Label(p,16,220,728,11,C.Muted)
-    local function toggle(x,symbol,action)
-        local b=UI.Button(p,{x=x,y=9,width=24,height=23,text=symbol,onClick=function() Send(action) end})
-        b.Depth:Set(function() return p.Depth()+7 end)
-        local t=b.Label
+    v.Neighbors=Label(p,16,98,728,11,C.Cost)
+    v.Modules=Label(p,16,133,104,12,C.Muted);Text(v.Modules,'MODULES')
+    v.Slots=Label(p,16,152,108,12,C.Text)
+    v.Upgrades=Label(p,16,128,108,12,C.Muted);Text(v.Upgrades,'UPGRADES')
+    v.Hint=Label(p,16,148,108,10,C.Muted);Text(v.Hint,'Click to fit')
+    v.Info=Label(p,16,190,728,11,C.Muted)
+    local function toggle(offset,symbol,action)
+        local b=UI.Button(window.TitleBar,{x=function() return window.Width()-offset end,y=3,width=24,height=24,text=symbol,onClick=function() Send(action) end})
         local hover={Root=b,Visible=true,Lines=function()
             if action=='pause' then return {
                 {Text=v.State.InstallPaused and 'Resume module work' or 'Pause module work',Color=C.Cost},
@@ -118,9 +114,10 @@ local function Create(state,id)
             return handle(self,event)
         end
         UI.Interactive(b)
-        return t
+        return b
     end
-    v.Pause=toggle(690,'II','pause');v.Repair=toggle(722,'+','repair')
+    v.Pause=toggle(84,'II','pause');v.Repair=toggle(56,'+','repair')
+    window.Title.Width:Set(function() return math.max(0,window.Width()-102) end)
     local tip=Group(frame,'Module Tooltip');tip.Depth:Set(function() return window.Depth()+120 end);tip.Width:Set(396);tip.Height:Set(264)
     tip:DisableHitTest();v.Tip=tip
     local tb=UI.FrameSkin(tip)
@@ -195,7 +192,7 @@ Update=function()
     v.State=state
     local live=Exchange.GetState(Messages.Live,id) or {HP=state.Stats.ShieldMaxHP,MaxHP=state.Stats.ShieldMaxHP,Regen=0,Damage=0,Status=''}
     if v.RequestError then state.LastReason=v.RequestError end
-    Text(v.Title,(state.Faction or 'UEF')..'  /  MODULAR SHIELD',C.Text)
+    Text(v.Title,(state.Faction or 'UEF')..' / Modular Shield',C.Text)
     Text(v.HP,string.format('HP  %.0f / %.0f',live.HP,live.MaxHP),C.HP)
     Text(v.Regen,string.format('+%.0f HP/s  %s',live.Regen,live.Status),C.Regen)
     Text(v.Damage,string.format('-%.0f HP/s  (5s avg)',live.Damage),C.Damage)
@@ -210,15 +207,16 @@ Update=function()
     end
     local neighbors=state.Neighbors or {}
     Text(v.Neighbors,string.format('Neighbors: %.0f E/s power | %d energy storage | %d mass storage | Slots: %d base + %d mass | Upkeep %.0f%%',neighbors.Production or 0,neighbors.EnergyStorage or 0,neighbors.MassStorage or 0,state.BaseSlots or state.Slots,state.BonusSlots or 0,100*(state.NativeAdjacency or 1)),C.Cost)
-    Text(v.Pause,state.InstallPaused and '>' or 'II',state.InstallPaused and C.Cost or C.Text)
-    Text(v.Repair,'+',state.RepairPaused and C.Muted or C.Regen)
+    Text(v.Pause.Label,state.InstallPaused and '>' or 'II')
+    v.Pause:SetTextColor(state.InstallPaused and C.Cost or C.Text)
+    v.Repair:SetTextColor(state.RepairPaused and C.Muted or C.Regen)
     local barrier=state.Barrier=='Active' and '  |  Barrier active' or (state.Barrier=='WarmingUp' and '  |  Barrier warming up' or '')
     Text(v.Info,state.Used>state.Slots and 'Over capacity: excess modules are dormant. Restore mass storage or remove modules.' or (state.LastReason and Model.Reason(state.LastReason) or string.format('Radius %.0f  |  Assisting %d  |  %.0f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier),(state.LastReason or state.Used>state.Slots) and C.Damage or C.Muted)
     local faction=string.lower(state.Faction or 'UEF')
     if faction~='uef' and faction~='aeon' and faction~='cybran' and faction~='seraphim' then faction='uef' end
     local members,available=Model.Lists(state)
     local memberRows=math.max(1,math.ceil(table.getn(members)/8))
-    local upgradeY=158+memberRows*73
+    local upgradeY=128+memberRows*73
     local upgradeRows=math.max(1,math.ceil(table.getn(available)/8))
     local infoY=upgradeY+upgradeRows*73+8
     v.Panel.Height:Set(infoY+24)
@@ -245,7 +243,7 @@ Update=function()
             card.Progress:SetSolidColor(job and job.Kind=='Remove' and C.Damage or C.Special)
         end
     end
-    place(members,158);place(available,upgradeY)
+    place(members,128);place(available,upgradeY)
     for key,card in pairs(v.Cards) do ShowCard(card,visible[key] or false) end
     UpdateTooltip(v)
 end

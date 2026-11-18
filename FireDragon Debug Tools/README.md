@@ -1,4 +1,4 @@
-Requires **FireDragon Mod Loader v13** installed and enabled as a normal FAF mod (shared core dependency).
+Requires **FireDragon Mod Loader v15** installed and enabled as a normal FAF mod (shared core dependency).
 
 # FireDragon Debug Tools
 

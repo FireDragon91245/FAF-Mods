@@ -32,7 +32,9 @@ local function control(parent,name)
     if parent then table.insert(parent.Children,c) end
     function c:DisableHitTest() self.NoHit=true end
     function c:EnableHitTest() self.NoHit=false end
-    function c:SetText(v) self.Text=v end
+    c.TextAdvance=lazy(0);c.FontAscent=lazy(11);c.FontDescent=lazy(3)
+    function c:SetText(v) self.Text=v;self.TextAdvance:Set(#v*7) end
+    function c:SetDropShadow(v) self.DropShadow=v end
     function c:GetText() return self.Text end
     function c:SetFont() end
     function c:SetForegroundColor() end
@@ -46,13 +48,21 @@ local function control(parent,name)
     function c:SetSolidColor(v) self.Color=v;self.Texture=nil end
     function c:SetTexture(v) self.Texture=v;self.Color=nil end
     function c:SetClipToWidth(v) self.Clip=v end
+    function c:SetCenteredHorizontally(v) self.CenteredHorizontally=v end
+    function c:SetCenteredVertically(v) self.CenteredVertically=v end
     function c:SetUV(...) self.UV={...} end
     function c:SetAlpha(v) self.Alpha=v end
     function c:GetStringAdvance(s) return #s*7 end
     function c:UseAlphaHitTest(v) self.AlphaHit=v end
     function c:SetNeedsFrameUpdate(v) self.Updates=v end
-    function c:Hide() self.Hidden=true;if self.OnHide then self:OnHide(true) end end
-    function c:Show() self.Hidden=false;if self.OnHide then self:OnHide(false) end end
+    -- Native Maui propagates visibility into descendants, clearing page flags.
+    local function propagate(node,hidden)
+        node.Hidden=hidden
+        if node.OnHide and node:OnHide(hidden) then return end
+        for _,child in ipairs(node.Children) do if not child.Destroyed then propagate(child,hidden) end end
+    end
+    function c:Hide() assert(not self.Destroyed);propagate(self,true) end
+    function c:Show() assert(not self.Destroyed);propagate(self,false) end
     function c:IsHidden() return self.Hidden end
     function c:GetRootFrame() return GetFrame(0) end
     function c:Destroy() self.Destroyed=true;if self.OnDestroy then self:OnDestroy() end;for _,child in ipairs(self.Children) do child:Destroy() end end
@@ -62,8 +72,8 @@ local frame=control(nil,'frame');frame.Width:Set(1920);frame.Height:Set(1080)
 function GetFrame() return frame end
 local drag
 function PostDragger(_,_,d) drag=d end
-local UIUtil={bodyFont='body',SkinnableFile=function(p) return '/skin'..p end}
-function UIUtil.CreateText(parent,text) local c=control(parent);c.Text=text;return c end
+local UIUtil={bodyFont='body',buttonFont='button',SkinnableFile=function(p) return '/skin'..p end}
+function UIUtil.CreateText(parent,text) local c=control(parent);c:SetText(text);return c end
 local ui,storage,exchange
 local savedPreferences={}
 function SavePreferences() end
@@ -101,6 +111,28 @@ tabs:Select('b');check(a.Hidden and not b.Hidden,'tab switch')
 check(tabs.Buttons.b.FDVisual.Texture:find('small_btn_down.dds',1,true),'selected tab uses native down texture, not a solid overlay')
 tabs.Buttons.b:HandleEvent({Type='MouseEnter'})
 check(tabs.Buttons.b.FDVisual.Texture:find('small_btn_down.dds',1,true),'selected tab keeps its texture on hover')
+check(tabs.Buttons.b.Label.FDVisual.Color=='ff000000','selected tab uses black text against its bright background')
+tabs.Buttons.a:HandleEvent({Type='MouseEnter'})
+check(tabs.Buttons.a.Label.FDVisual.Color=='ff000000','hovered button retains readable contrast')
+tabs.Buttons.a:HandleEvent({Type='MouseExit'})
+check(tabs.Buttons.a.Label.FDVisual.Color==ui.Theme.Text,'leaving hover restores the normal caption color')
+local symbol=ui.Button(b,{width=28,height=28,text='+'})
+check(symbol.Label.Left()==math.floor(symbol.Left()+(symbol.Width()-symbol.Label.Width())/2) and symbol.Label.Top()==math.floor(symbol.Top()+(symbol.Height()-symbol.Label.Height())/2),'button glyphs use measured pixel-aligned centering')
+check(symbol.Label.FDVisual.DropShadow==false,'captions render without a washed-out shadow')
+symbol:OnFrame()
+check(symbol.FDVisual.UV[1]==8/200 and symbol.FDVisual.UV[2]==14/72 and symbol.FDVisual.UV[4]==60/72,'button art excludes its transparent outer margin')
+symbol.Width:Set(80);symbol.Height:Set(40);symbol.Label:SetText('II')
+check(symbol.Label.Width()==14 and symbol.Label.Left()==math.floor(symbol.Left()+33) and symbol.Label.Top()==math.floor(symbol.Top()+13),'caption measurement and centering follow resizing and text changes')
+symbol:SetTextColor('ff74e4bb');symbol:HandleEvent({Type='MouseEnter'});symbol:SetTextColor('ff74e4bb')
+check(symbol.Label.FDVisual.Color=='ff000000','status refresh cannot override hover contrast')
+symbol:HandleEvent({Type='MouseExit'});symbol:SetEnabled(false)
+check(symbol.Label.FDVisual.Color==ui.Theme.Muted,'disabled button uses muted text')
+tabs:Add('custom','Narrow',{width=92})
+check(tabs.Buttons.custom.Width()==92 and tabs.Buttons.custom.Left()==tabs.Buttons.b.Right()+4,'individual tab widths preserve adjacent layout')
+tabs:Add('tail','Last',{width=64})
+tabs:Remove('custom')
+check(tabs.Buttons.tail.Left()==tabs.Buttons.b.Right()+4,'removing an unequal-width tab closes its gap')
+tabs:Remove('tail')
 local slider=ui.Slider(b,{width=200,min=0,max=10,step=1})
 local initialLeft=slider.Thumb.Left()
 slider:SetValue(5,true)
@@ -143,6 +175,7 @@ check(numeric.Value==70 and numeric.Input:GetText()=='70','refresh cannot reset 
 drag:OnRelease()
 check(numeric.Input.FrameParts[1].FDVisual.Texture:find('/game/chat_brd/',1,true),'numeric entry uses the vanilla frame')
 local scroll=ui.Scroll(b,{width=100,height=80,contentWidth=500,contentHeight=400})
+check(scroll.HorizontalScrollbar.FDVisual.Texture:find('/scrollbar/horizontal-back.dds',1,true) and scroll.HorizontalThumb.FDVisual.Texture:find('/scrollbar/horizontal-thumb.dds',1,true),'horizontal scrollbar uses rotated vanilla art instead of solid blue colors')
 local icon=ui.Icon(scroll.Content,{x=80,y=60,width=60,height=60,texture='test'})
 icon:OnFrame(0)
 check(icon.Width()==60 and icon.FDVisual.Width()==8 and icon.FDVisual.Height()==8,'overflow cropped without shrinking layout')
@@ -294,7 +327,20 @@ end,schema.Validate,{scope='Sim',authorize='Cheats'})
 flush()
 debugWindow:OnFrame(.2)
 check(debugTabs.Pages.shields~=nil,'published parameter makes shield tab appear live')
+for _,button in pairs(debugTabs.Buttons) do
+    check(button.Height()>=32 and button.Width()>=button.Label.FDVisual:GetStringAdvance(button.Label.FDText)+32,'debug tabs have room around their captions')
+    check(button.Right()<=debugTabs.Right(),'debug tabs fit the window')
+end
+debugWindow:SetSize(debugWindow.MinWidth,debugWindow.MinHeight)
+check(debugTabs.Buttons.shields.Right()<=debugTabs.Right(),'both debug tabs fit at minimum window width')
 debugTabs:Select('shields')
+check(debugTabs.Buttons.vanilla.Width()<debugTabs.Buttons.shields.Width(),'tabs size individually to their captions')
+for cycle=1,3 do
+    debugWindow:Close();env.Toggle()
+    for _,c in ipairs(controls) do if not c.Destroyed and c.Updates and c.OnFrame then c:OnFrame(.2) end end
+    check(debugTabs.Pages.vanilla.Hidden and not debugTabs.Pages.shields.Hidden and allVisualsHidden(debugTabs.Pages.vanilla),'reopening preserves the selected page and hides all inactive renderers')
+    check(at(box.Left()+30,box.Top()+10)~=box.FDHit,'inactive vanilla checkbox cannot intercept input')
+end
 local numbers={}
 local ignore
 local function visit(node)
@@ -337,6 +383,10 @@ check(ignore.Checked and exchange.Get(schema.Key).IgnoreResources,'denied edit i
 check(exchange.ConfigStatus(schema.Key).denied,'UI reads denial from generic exchange status')
 debugTabs:Select('vanilla');hp.Input:OnFrame()
 check(hp.Input.Edit.Hidden,'native text input hides when its tab is hidden')
+debugWindow:Close();env.Toggle();hp.Input:OnFrame()
+check(debugTabs.Pages.shields.Hidden and allVisualsHidden(debugTabs.Pages.shields) and hp.Input.Edit.Hidden,'reopening Vanilla does not expose shield controls or native inputs')
 published:Close();schemaOwner:Close();flush();debugWindow:OnFrame(.2)
 check(not debugTabs.Pages.shields and debugTabs.Pages.vanilla,'removing parameter removes only shield tab')
+debugWindow:Close();env.Toggle()
+check(not debugWindow.Hidden,'reopening safely skips removed tab controls')
 print('PASS: '..checks..' shared UI and debug window checks')

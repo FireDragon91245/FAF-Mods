@@ -69,8 +69,8 @@ end
 local function Create()
     local frame=GetFrame(0)
     local panel=UI.Window(frame,{name='FireDragon Debug Tools',title='FireDragon Debug Tools',
-        x=frame.Width()-440,y=150,width=420,height=450,minWidth=360,minHeight=220})
-    local tabs=UI.Tabs(panel.Client,{tabWidth=160})
+        x=frame.Width()-480,y=150,width=460,height=450,minWidth=420,minHeight=220})
+    local tabs=UI.Tabs(panel.Client,{tabHeight=34})
     UI.At(tabs,panel.Client,8,8,function() return panel.Client.Width()-16 end,function() return math.max(0,panel.Client.Height()-42) end)
     local vanilla=tabs:Add('vanilla','Vanilla')
     local boxes={}
