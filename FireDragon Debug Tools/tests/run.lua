@@ -172,12 +172,15 @@ check(K.KeyAction.category == 'mods' and not string.find(K.ActionName, '-', 1, t
 check(string.find(K.KeyAction.action, "/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Panel.lua", 1, true), 'Action opens the panel')
 
 -- Startup registers the exchange endpoint; no custom callback/sync hooks remain.
-local started=false
+local started={}
 local hook=loadModule('src/hook/lua/simInit.lua',{
     BeginSession=function() return 'previous' end,
-    import=function() return {Start=function() started=true end} end,
+    import=function(path) return {Start=function() started[path]=true end} end,
 })
-check(hook.BeginSession()=='previous' and started,'Sim startup registers the Exchange service')
+check(hook.BeginSession()=='previous'
+    and started['/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Economy.lua']
+    and started['/mods/FireDragonDebugTools/lua/FireDragonDebugTools/InstantBuild.lua'],
+    'Sim startup registers both Exchange services')
 
 local actions = loadModule('src/hook/lua/keymap/keyactions.lua', { keyActions = {}, import = function() return K end })
 check(actions.keyActions[K.ActionName] == K.KeyAction, 'Key action is registered')

@@ -34,7 +34,17 @@ try {
     if ($ran -eq 0) { throw "No tests match '$Filter'." }
 
     $sources = @(Get-ChildItem -LiteralPath $mod -Recurse -File | Where-Object { $_.Extension -in '.lua','.bp' })
+    # Lua 5.4 accepts #, but FAF's Lua 5.0 cannot parse it. Skip comments and strings.
+    $luaTokens = @'
+(?s)--\[(?<CommentEquals>=*)\[.*?\]\k<CommentEquals>\]|--[^\r\n]*|\[(?<StringEquals>=*)\[.*?\]\k<StringEquals>\]|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?<Length>#)
+'@
     foreach ($source in $sources) {
+        $code = Get-Content -LiteralPath $source.FullName -Raw
+        $unsupported = @([regex]::Matches($code, $luaTokens) | Where-Object { $_.Groups['Length'].Success })
+        if ($unsupported.Count) {
+            $line = 1 + [regex]::Matches($code.Substring(0, $unsupported[0].Index), "`n").Count
+            throw "FAF Lua 5.0 does not support the # length operator: $($source.FullName):$line. Use table.getn instead."
+        }
         & luac -p $source.FullName
         if ($LASTEXITCODE -ne 0) { throw "Syntax failed: $($source.FullName)" }
     }

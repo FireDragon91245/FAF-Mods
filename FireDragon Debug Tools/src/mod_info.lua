@@ -1,7 +1,7 @@
 name = 'FireDragon Debug Tools'
 uid = 'bc9d25b9-d9c5-44d3-bfb1-2277001a669f'
-version = 13
-description = 'Debug panel (Alt-Shift-D) with Vanilla economy tools and optional Modular Shields controls. Requires cheats or a single-player game.'
+version = 16
+description = 'Debug panel (Alt-Shift-D) with economy tools, instant build, game speed/pause and optional Modular Shields controls. Gameplay cheats require cheats or a single-player game.'
 author = 'Rick'
 selectable = true
 enabled = true
