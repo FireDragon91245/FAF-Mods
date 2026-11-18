@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "ModularShields",
-  "version": 29,
+  "version": 31,
   "dlls": [],
   "shaders": {
     "ModularHexDome": "shaders/UEFT4Hex.fx",

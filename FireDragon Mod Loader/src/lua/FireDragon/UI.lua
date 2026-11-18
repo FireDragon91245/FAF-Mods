@@ -244,7 +244,10 @@ function UI.Checkbox(parent,o)
     function c:SetCheck(v,silent)
         if silent and pending(self) then return end
         self.Checked=v==true;self:UpdateState()
-        if not silent and o.onCheck then track(self,o.onCheck(self,self.Checked)) end
+        if not silent then
+            if self.Binding then self.Binding:Submit(self.Checked)
+            elseif o.onCheck then track(self,o.onCheck(self,self.Checked)) end
+        end
     end
     function c:IsChecked() return self.Checked end
     c.OnHide=function(self,hidden) if hidden then self.Hovered=false;self:UpdateState() end end
@@ -257,7 +260,7 @@ function UI.Checkbox(parent,o)
         end
         return false
     end
-    UI.Interactive(c);c:SetCheck(o.checked,true);return c
+    UI.Interactive(c);c:SetCheck(o.checked,true);if o.binding then UI.AttachBinding(c,o.binding) end;return c
 end
 -- Native keyboard editing inside the library's clipped, themed layout.
 function UI.TextInput(parent,o)
@@ -339,14 +342,16 @@ function UI.Slider(parent,o)
         -- not dirty Left or its dependents. Rebind to invalidate the thumb.
         self.Thumb.Left:Set(position)
         if not self.FDSliderDrag and not self.Dirty then self.CommittedValue=v end
-        if changed and not silent and o.onChange then track(self,o.onChange(self,v)) end
+        if changed and not silent then
+            if self.Binding then self.Binding:Submit(v) elseif o.onChange then track(self,o.onChange(self,v)) end
+        end
     end
     function c:Commit()
         if not self.Dirty then return end
         self.Dirty=false;self.Idle=0
         if self.Value~=self.CommittedValue then
             self.CommittedValue=self.Value
-            if o.onChange then track(self,o.onChange(self,self.Value)) end
+            if self.Binding then self.Binding:Submit(self.Value) elseif o.onChange then track(self,o.onChange(self,self.Value)) end
         end
     end
     local function move(x)
@@ -355,6 +360,7 @@ function UI.Slider(parent,o)
         v=clamp(v,minimum,maximum)
         if v~=c.Value then
             c.Dirty=true;c.Idle=0;c:SetValue(v,true,true)
+            if c.Binding then c.Binding:Preview(v) end
             if o.onPreview then o.onPreview(c,v) end
         end
     end
@@ -369,10 +375,14 @@ function UI.Slider(parent,o)
         drag.OnRelease=function(_,x)
             if x and self.FDEnabled then move(x) end
             self:Commit();self.FDSliderDrag=nil;drag:Destroy();self:UpdateState()
+            if self.Binding then self.Binding:Refresh() end
+            if o.onEnd then o.onEnd(self) end
         end
         drag.OnCancel=function()
             self.Dirty=false;self.FDSliderDrag=nil;self:SetValue(self.CommittedValue,true,true)
             if o.onPreview then o.onPreview(self,self.Value) end
+            if self.Binding then self.Binding:ClearPreview() end
+            if o.onCancel then o.onCancel(self) end
             drag:Destroy();self:UpdateState()
         end
         PostDragger(self:GetRootFrame(),e.KeyCode,drag);return true
@@ -386,7 +396,7 @@ function UI.Slider(parent,o)
             if self.Idle>=(o.commitDelay or .3) then self:Commit() end
         end
     end
-    UI.Interactive(c);c:SetValue(o.value or minimum,true);c:UpdateState();return c
+    UI.Interactive(c);c:SetValue(o.value or minimum,true);c:UpdateState();if o.binding then UI.AttachBinding(c,o.binding) end;return c
 end
 -- Integer text entry (Enter to apply) plus a stepped slider for the same value.
 function UI.NumberInput(parent,o)
@@ -395,20 +405,24 @@ function UI.NumberInput(parent,o)
     function c:SetValue(v,silent)
         if silent and (pending(self) or self.Slider.FDSliderDrag or self.Slider.Dirty) then return true end
         if type(v)~='number' or v-v~=0 then return false end
-        v=clamp(math.floor(v+.5),minimum,maximum)
+        v=clamp(minimum+math.floor((v-minimum)/(o.step or 1)+.5)*(o.step or 1),minimum,maximum)
         local changed=v~=self.SubmittedValue;self.Value=v;self.SubmittedValue=v
         self.Input:SetText(tostring(v));self.Slider:SetValue(v,true)
-        if changed and not silent and o.onChange then track(self,o.onChange(self,v)) end
+        if changed and not silent then
+            if self.Binding then self.Binding:Submit(v) elseif o.onChange then track(self,o.onChange(self,v)) end
+        end
         return true
     end
     c.Input=UI.TextInput(c,{x=function() return math.max(0,c.Width()-76) end,width=76,height=function() return c.Height() end,
         onCommit=function(_,text) return c:SetValue(tonumber(text)) end})
     c.Slider=UI.Slider(c,{width=function() return math.max(10,c.Width()-88) end,height=function() return c.Height() end,
         min=minimum,max=maximum,step=o.step or 1,commitDelay=o.commitDelay,
-        onPreview=function(_,v) c.Value=v;c.Input:SetText(tostring(v)) end,
+        onPreview=function(_,v) c.Value=v;c.Input:SetText(tostring(v));if c.Binding then c.Binding:Preview(v) end end,
+        onCancel=function() if c.Binding then c.Binding:ClearPreview();c.Binding:Refresh() end end,
+        onEnd=function() if c.Binding then c.Binding:Refresh() end end,
         onChange=function(_,v) c:SetValue(v);return c.PendingTicket end})
     function c:SetEnabled(enabled) self.Input:SetEnabled(enabled);self.Slider:SetEnabled(enabled) end
-    c:SetValue(o.value or minimum,true);return c
+    c:SetValue(o.value or minimum,true);if o.binding then UI.AttachBinding(c,o.binding) end;return c
 end
 function UI.FrameSkin(c)
     local root=UI.Panel(c,{depth=0});UI.Fill(root,c)
@@ -656,6 +670,9 @@ function UI.Bind(owner,read,apply,interval)
     owner.OnFrame=function(self,dt) if previous then previous(self,dt) end;if not active then return end;elapsed=elapsed+(dt or 0);if elapsed>=(interval or 0.1) then elapsed=0;update() end end
     owner:SetNeedsFrameUpdate(true);update()
     return function() active=false end
+end
+function UI.AttachBinding(control,spec)
+    return import('/mods/FireDragonModLoader/lua/FireDragon/Bindings.lua').Export.Attach(control,spec)
 end
 function UI.Dim(parent,o) o=o or {};o.color=o.color or '99000000';local c=UI.Rect(parent,o);UI.Fill(c,parent);return c end
 -- Texture-space multi-tap blur. This does not sample the game framebuffer.

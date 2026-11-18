@@ -40,7 +40,7 @@ function Transport.Attach(bus,options)
     local pending,mirrors,lastWrites,active,seen={},{},{},{},{}
     local outbox,dirty,exported,lastIDs,sessions,sessionOwners={},{},{},{},{},{}
     local sequence,revision=0,0
-    local retained,stateDirty,stateMirrors={},{},{}
+    local retained,stateDirty,stateMirrors,stateIdentities={},{},{},{}
     local stateRevision,batchSerial,lastSerial=0,0,0
     local stateEpoch,deliveredStates=0,{}
     local lastFocus
@@ -81,7 +81,7 @@ function Transport.Attach(bus,options)
         assert(integer(capacity,1024),'Response capacity must be 1..1024')
         assert(length(sorted(pending))<256,'Too many pending remote operations')
         local packet={protocol=1,session=session,id=nextID(),op=op,name=name,value=value,timeout=timeout,
-            replyMode=opts.replyMode or 'All'}
+            replyMode=opts.replyMode or 'All',confirmation=opts.confirmation}
         checked(packet)
         local state={id=packet.id,status='pending',responses={},deadline=clock()+timeout,capacity=capacity}
         local ticket={ID=packet.id,Key=session..'/'..tostring(packet.id)}
@@ -118,6 +118,14 @@ function Transport.Attach(bus,options)
         return ticket
     end
     if realm=='UI' then
+        bus.ConfigRevision=function(key) return mirrors[key] and mirrors[key].revision end
+        bus.StateRevision=function(topic,key)
+            local entry=stateMirrors[stateKey(topic,key)];return entry and entry.revision
+        end
+        bus.StateIdentity=function(topic,key)
+            local entry=stateMirrors[stateKey(topic,key)]
+            return entry and tostring(entry.identity)..':'..tostring(entry.army)
+        end
         bus.UI=bus
         bus.Sim={Publish=function(topic,payload,opts) return submit('publish',topic,payload,opts) end,
             Request=function(topic,payload,opts) return submit('request',topic,payload,opts) end}
@@ -211,9 +219,12 @@ function Transport.Attach(bus,options)
         if stateRevision>=1000000 then stateEpoch=stateEpoch+1;stateRevision=0 end
         stateRevision=stateRevision+1
         local version=string.format('%08d:%08d',stateEpoch,stateRevision)
-        local record=checked({name=topic,key=key,value=value,army=settings.army,revision=version})
+        local tag=stateKey(topic,key)
+        if not retained[tag] then stateIdentities[tag]=version end
+        local record=checked({name=topic,key=key,value=value,army=settings.army,revision=version,identity=stateIdentities[tag]})
         local tag=stateKey(topic,key)
         retained[tag]=value~=nil and record or nil;stateDirty[tag]=record
+        if value==nil then stateIdentities[tag]=nil end
     end
     bus._configChanged=function(key)
         local entry=bus._Entries[key]
@@ -275,7 +286,9 @@ function Transport.Attach(bus,options)
                 bus._SetRemote(packet.name,packet.value.path,packet.value.value,trusted)
             end)
             if not accepted then fail(packet,source,'invalid_value');report(err);return false end
-            response(packet,source,'ack',{response={value=true}})
+            -- Even a no-op write needs an authoritative revision fence.
+            bus._configChanged(packet.name)
+            response(packet,source,'ack',{response={value=true,confirmation={config=packet.name,revision=dirty[packet.name]}}})
             response(packet,source,'done',{status='complete'})
         elseif packet.op=='publish' then
             local accepted,delivered,errors=pcall(bus.Publish,packet.name,packet.value,trusted)
@@ -283,10 +296,17 @@ function Transport.Attach(bus,options)
             response(packet,source,'ack',{response={value={delivered=delivered,errors=errors}}})
             response(packet,source,'done',{status='complete'})
         elseif packet.op=='request' then
+            local c=packet.confirmation
+            if c~=nil and (type(c)~='table' or not identifier(c.topic) or
+                not (type(c.key)=='string' or (type(c.key)=='number' and c.key-c.key==0))) then
+                fail(packet,source,'invalid_confirmation');return false
+            end
+            local before=c and (retained[stateKey(c.topic,c.key)] or stateDirty[stateKey(c.topic,c.key)])
+            local baseline=before and before.revision
             local accepted,ticket=pcall(bus.Request,packet.name,packet.value,
                 {timeout=packet.timeout,replyMode=packet.replyMode,source=trusted})
             if not accepted then fail(packet,source,'invalid_request');report(ticket);return false end
-            active[key]={ticket=ticket,packet=copy(packet),source=copy(source)}
+            active[key]={ticket=ticket,packet=copy(packet),source=copy(source),baseline=baseline}
         end
         return true
     end
@@ -299,6 +319,11 @@ function Transport.Attach(bus,options)
                 local result=state.ticket:Poll()
                 if not result then break end
                 local valid,encoded=pcall(checked,result)
+                if valid and state.packet.confirmation then
+                    local c=state.packet.confirmation
+                    local snapshot=retained[stateKey(c.topic,c.key)] or stateDirty[stateKey(c.topic,c.key)]
+                    if snapshot and (not state.baseline or snapshot.revision>state.baseline) then encoded.confirmation={topic=c.topic,key=c.key,revision=snapshot.revision} end
+                end
                 response(state.packet,state.source,'reply',{response=valid and encoded or {error='invalid_remote_response'}})
             end
             if length(outbox)<510 and state.ticket:Status()~='pending' then

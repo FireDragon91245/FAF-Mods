@@ -1,3 +1,4 @@
+local Bindings=assert(loadfile('src/lua/FireDragon/Bindings.lua'))()
 table.getn=table.getn or function(t) local n=0;while t[n+1]~=nil do n=n+1 end;return n end
 local Exchange=assert(loadfile('src/lua/FireDragon/InformationExchange.lua'))()
 local Transport=assert(loadfile('src/lua/FireDragon/ExchangeTransport.lua'))()
@@ -15,6 +16,7 @@ local function runtime(bus,realm)
         end,
         SimCallback=function(command) table.insert(commands,command) end}, {__index=_G})
     env.import=function(path)
+        if string.find(path,'FireDragon/Bindings.lua',1,true) then return {Export=Bindings} end
         if string.find(path,'ExchangeTransport.lua',1,true) then return {Export=Transport} end
         if path=='/lua/simutils.lua' then return {GetCurrentCommandSourceArmy=function() return 1 end} end
         if path=='/lua/ui/game/gamemain.lua' then return {AddBeatFunction=function(fn) table.insert(beats,fn) end} end

@@ -92,3 +92,6 @@ Run `python -B tests/ui_game_smoke.py` for a disposable check in the actual FAF 
 Window geometry can be persisted with `prefKey='my_mod_window'`. Drag/resize release, close, hide and destruction save the geometry through the [shared storage API](STORAGE_API.md) in namespace `FireDragon.UI`; recreation restores it and clamps it into the current screen. Dimensions follow UI scaling. `SaveGeometry()` can save programmatic changes explicitly. Keys are exact strings, including dots. Version 7 is a breaking change: old flat profile preferences are not migrated.
 
 Scroll components now expose `Viewport`, `HorizontalScrollbar` and `HorizontalThumb` alongside the vertical `Scrollbar` and `Thumb`. Each axis appears only when needed; the viewport reserves room for visible tracks so they do not cover content. Both thumbs can be dragged and both tracks accept clicks. Without vertical overflow, the regular wheel also scrolls horizontal content. `Content` is owned by `Viewport`; create children under `Content` as before.
+
+
+Declarative optimistic bindings and transaction ownership are documented in [BINDINGS.md](BINDINGS.md).

@@ -1,10 +1,10 @@
 Upgrade and cancellation clicks update immediately and reconcile with the simulation, including dependent queue cancellation and cancelling requests that have not yet received a job ID. The window remembers its geometry per FAF profile, with horizontal and vertical scrolling when resized.
 
-Requires **FireDragon Mod Loader v15** installed and enabled as a normal FAF mod (shared core dependency).
+Requires **FireDragon Mod Loader v17** installed and enabled as a normal FAF mod (shared core dependency).
 
 Version 27 publishes match-wide ReadWrite debug settings once in Sim under
 `ModularShields.Debug`, with control metadata under `ModularShields.DebugSchema`.
-FireDragon Debug Tools v11 displays them in its optional Modular Shields tab.
+FireDragon Debug Tools v13 displays them in its optional Modular Shields tab.
 The publication declares `{scope='Sim', authorize='Cheats'}` and a validator.
 The shared loader owns UI commands, authorization, authoritative mirrors and sync;
 Modular Shields has no UI publication or custom configuration sync handlers.

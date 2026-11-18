@@ -66,7 +66,7 @@ function Exchange.New(options)
     local clock = options.clock or defaultClock
     local onError = options.onError or function(message) if WARN then WARN(message) end end
     assert(type(clock) == 'function' and type(onError) == 'function', 'Invalid exchange options')
-    local bus = {}
+    local bus = {_Clock=clock}
     local configs, topics, requests = {}, {}, {}
     local eventSettings, eventStates, exposures, states = {}, {}, {}, {}
     local nextID = 0
@@ -80,7 +80,7 @@ function Exchange.New(options)
     local function current(k)
         local entry = configs[k]; assert(entry, 'Configuration key is not published: ' .. tostring(k)); return entry
     end
-    local function write(entry, path, value, owner, source)
+    local function write(entry, path, value, owner, source, tryWrite)
         assert(configs[entry.key] == entry, 'Publication is closed')
         assert(owner or entry.mode == 'ReadWrite', 'Configuration is ReadOnly')
         assert(not entry.notifying, 'Cannot write the same publication from its change callback')
@@ -98,7 +98,10 @@ function Exchange.New(options)
             parent[path[size(path)]] = value
             updated = copy(updated) -- validate final depth before committing
         end
-        if entry.validate then assert(entry.validate(copy(updated)) ~= false, 'Configuration validation rejected the value') end
+        if entry.validate and entry.validate(copy(updated)) == false then
+            if tryWrite then return nil,'invalid_value' end
+            error('Configuration validation rejected the value')
+        end
         if entry.declaration.scope=='Sim' and bus._configValidate then bus._configValidate(updated,entry.key,entry.mode) end
         if equal(old, updated) then return false end
         entry.value = updated; entry.version = entry.version + 1
@@ -160,6 +163,15 @@ function Exchange.New(options)
     function bus.View(k) name(k); return view(current(k), {}, false) end
     function bus.Set(k, value) name(k); return write(current(k), {}, value, false) end
     function bus.SetPath(k, path, value) name(k); return write(current(k), pathCopy(path), value, false) end
+    -- Expected local user failures are data. Validator programming errors
+    -- are not caught or turned into rejected user interactions by this API.
+    function bus.TrySetPath(k,path,value)
+        name(k)
+        local entry=configs[k]
+        if not entry then return nil,'missing_config' end
+        if entry.mode~='ReadWrite' then return nil,'read_only' end
+        return write(entry,pathCopy(path),value,false,nil,true)
+    end
     -- Transport integration stays inside the loader; callbacks receive trusted source metadata.
     bus._Copy=copy;bus._Entries=configs;bus._Exposures=exposures
     function bus._SetRemote(k,path,value,source) return write(current(k),pathCopy(path),value,false,source) end

@@ -194,11 +194,11 @@ local function MakeGenerator(Base)
             elseif action == 'cancel' and type(value) == 'number' then
                 Jobs.Stop(self); reason = R.Core.RequestCancel(self.Loadout,value,R.Registry)
             elseif action == 'pause' then
-                self.InstallPaused = not self.InstallPaused
+                if type(value)=='boolean' then self.InstallPaused=value else self.InstallPaused=not self.InstallPaused end
                 if self.InstallPaused then Jobs.Stop(self) end
                 if self.Loadout.Queue[1] then self.Loadout.Queue[1].State = self.InstallPaused and 'Paused' or 'Queued' end
             elseif action == 'repair' then
-                self.RepairPaused = not self.RepairPaused
+                if type(value)=='boolean' then self.RepairPaused=value else self.RepairPaused=not self.RepairPaused end
                 if self.RepairPaused then self.ModuleRepairMass=0 end
             end
             self.ModuleReason = reason and (reason.Code..(reason.Module and ': '..reason.Module or ''))

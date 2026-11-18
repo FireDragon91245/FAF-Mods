@@ -1,3 +1,4 @@
+local Bindings=assert(loadfile('src/lua/FireDragon/Bindings.lua'))()
 -- Headless Maui contract and routed-input regression checks.
 table.getn=table.getn or function(t) return #t end
 math.mod=math.mod or math.fmod
@@ -78,6 +79,7 @@ local ui,storage,exchange
 local savedPreferences={}
 function SavePreferences() end
 function import(path)
+        if string.find(path,'FireDragon/Bindings.lua',1,true) then return {Export=Bindings} end
     if path:find('FireDragon/InformationExchange.lua',1,true) then return {Export=exchange} end
     if path:find('FireDragon/Storage.lua',1,true) then return {Export=storage} end
     if path=='/lua/user/prefs.lua' then return {GetCurrentProfile=function() return savedPreferences end,GetFromCurrentProfile=function(k) return savedPreferences[k] end,SetToCurrentProfile=function(k,v) savedPreferences[k]=v end} end
@@ -262,20 +264,25 @@ local _,cx,cy=pointer(testWindow.CloseButton);drag:OnRelease(cx,cy)
 check(testWindow.Hidden and at(cx,cy)~=testWindow.CloseButton.FDHit,'close button hides window and input tree')
 -- Exercise the real debug UI: clicks remain secured sim requests and sync is silent.
 local sent={}
+local economyRevision=0
+exchange.StateRevision=function() return economyRevision end
 exchange.Sim={Request=function(topic,data)
     sent[#sent+1]={Topic=topic,Args=data}
     local once=false
     return {Status=function() return 'complete' end,Poll=function()
-        if once then return nil end;once=true;return {value={Accepted=true}}
+        if once then return nil end;once=true;return {value={Accepted=true},confirmation={revision=0}}
     end}
 end}
 local function economy(data)
-    exchange.PublishState('FireDragonDebugTools.Economy','1',data)
+    economyRevision=economyRevision+1
+    exchange.PublishState('FireDragonDebugTools.Economy','1',data);Bindings.Step()
     for _,c in ipairs(controls) do if not c.Destroyed and c.FDWindow and c.OnFrame then c:OnFrame(.2) end end
 end
-function GetFocusArmy() return 1 end
+local focusArmy=1
+function GetFocusArmy() return focusArmy end
 local env=setmetatable({}, {__index=_G})
 assert(loadfile('../FireDragon Debug Tools/src/lua/FireDragonDebugTools/Panel.lua','t',env))()
+economy({Energy=false,Mass=false})
 env.Toggle()
 local box
 for _,c in ipairs(controls) do if c.Checked~=nil and c.Label.FDText:find('Infinite Energy',1,true) then box=c end end
@@ -318,7 +325,7 @@ local function flush()
     for _,packet in ipairs(batch) do server.Receive(packet,actor) end
     server.Flush()
     for _,packet in ipairs(packets) do client.Receive(packet) end
-    packets={}
+    packets={};Bindings.Step()
 end
 local schemaOwner=simBus.PublishConfig(schema.SchemaKey,schema.Fields,'ReadOnly',nil,nil,{scope='Sim'})
 local published=simBus.PublishConfig(schema.Key,schema.Defaults(),'ReadWrite',function(values)
@@ -389,4 +396,31 @@ published:Close();schemaOwner:Close();flush();debugWindow:OnFrame(.2)
 check(not debugTabs.Pages.shields and debugTabs.Pages.vanilla,'removing parameter removes only shield tab')
 debugWindow:Close();env.Toggle()
 check(not debugWindow.Hidden,'reopening safely skips removed tab controls')
+-- Bound slider drafts are shared immediately, but only commits send messages.
+local boundWrites=0
+local rejectBound=false
+exchange.PublishConfig('slider-local',{n=0},'ReadWrite',function() boundWrites=boundWrites+1 end,function() return not rejectBound end)
+local shared=Bindings.Config(exchange,'slider-local')
+local n1=ui.NumberInput(frame,{width=300,min=0,max=100,step=10,binding={journal=shared,path={'n'}}})
+local n2=ui.NumberInput(frame,{width=300,min=0,max=100,step=10,binding={journal=shared,path={'n'}}})
+n1.Slider:HandleEvent{Type='ButtonPress',MouseX=n1.Slider.Left()+16+(n1.Slider.Width()-32)*.7,KeyCode=1}
+check(n1.Value==70 and n2.Value==70 and boundWrites==0,'bound slider previews update all observers without sending')
+n1.Slider:OnFrame(.4)
+check(boundWrites==1 and n2.Value==70,'bound idle commit sends once')
+drag:OnRelease();check(boundWrites==1,'bound release after idle does not resubmit')
+n2.Input.Edit:SetText('86');n2.Input.Edit:OnEnterPressed()
+check(n1.Value==90 and n2.Value==90 and boundWrites==2,'bound typed Enter shares stepped numeric value')
+n1:Destroy();n2:SetValue(40)
+check(shared:Get().n==40,'destroyed numeric binding leaves other control usable')
+rejectBound=true
+n2.Slider:HandleEvent{Type='ButtonPress',MouseX=n2.Slider.Left()+16+(n2.Slider.Width()-32)*.7,KeyCode=1}
+n2.Slider:OnFrame(.4);drag:OnRelease()
+check(n2.Value==40 and n2.Slider.Value==40,'rejection during an idle drag reconciles when the drag ends')
+exchange.PublishState('FireDragonDebugTools.Economy','2',{Energy=true,Mass=false})
+focusArmy=2;Bindings.Step()
+check(box.Checked and box.FDEnabled,'focus-army binding switches targets without a mod refresh')
+focusArmy=3;Bindings.Step()
+check(not box.Checked and not box.FDEnabled,'missing target cannot display the previous army state')
+focusArmy=1;Bindings.Step()
+check(not box.Checked and box.FDEnabled,'returning to an available army restores its own state and input')
 print('PASS: '..checks..' shared UI and debug window checks')

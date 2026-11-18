@@ -64,10 +64,10 @@ local function Requirements(req,available,caps)
 end
 -- Replay unacknowledged UI actions in send order over the authoritative snapshot.
 -- Cancels remove their job and invalidate dependents just like Core.Loadout.Cancel.
-local function Project(state,pending,now)
+local function Project(state,pending)
     local result={};for key,value in pairs(state) do result[key]=value end
     result.Rows={};result.Queue={};result.Used=state.Used
-    local rows,available,queued={},{},{}
+    local rows,available,queued,invalid={},{},{},{}
     for _,row in ipairs(state.Rows) do
         local copy={};for key,value in pairs(row) do copy[key]=value end
         table.insert(result.Rows,copy);rows[row.Id]=copy
@@ -97,20 +97,29 @@ local function Project(state,pending,now)
             if job.Kind=='Remove' then valid=installed[job.ModuleId]
             else valid=not Requirements(rows[job.ModuleId].Requires,installed,state.Capabilities or {}) end
             if valid then table.insert(result.Queue,job);installed[job.ModuleId]=job.Kind~='Remove' or nil
-            else release(job) end
+            else
+                release(job)
+                if job.RequestId then invalid[job.RequestId]='dependency_invalidated' end
+            end
         end
     end
     indexQueue()
     local kept={}
     for _,request in ipairs(pending) do
         local row=rows[request.ModuleId]
-        local acknowledged=request.Ticket and request.Ticket:Status()~='pending'
-        if not acknowledged and now<request.Expires and row then
+        if request.Action=='pause' then result.InstallPaused=request.Value
+        elseif request.Action=='repair' then result.RepairPaused=request.Value
+        elseif row then
             table.insert(kept,request)
             if request.Action=='cancel' then cancel(request)
-            elseif not row.Installed and not queued[row.Id] then
+            elseif request.Action=='remove' and row.Installed and not queued[row.Id] then
+                table.insert(result.Queue,{ModuleId=row.Id,Kind='Remove',JobId=false,RequestId=request.RequestId,Pending=true,State='Sending',PaidWork=0,Quote=row.Quote})
+            elseif request.Action=='install' and not row.Installed and not queued[row.Id] and
+                not Requirements(row.Requires,available,state.Capabilities or {}) and result.Used+(row.Quote.Slots or 1)<=result.Slots then
                 table.insert(result.Queue,{ModuleId=row.Id,JobId=false,RequestId=request.RequestId,Pending=true,State='Sending',PaidWork=0,Quote=row.Quote})
                 result.Used=result.Used+(row.Quote.Slots or 1)
+            elseif request.Action=='install' and not row.Installed and not queued[row.Id] then
+                invalid[request.RequestId]='dependency_or_capacity_invalidated'
             end
             indexQueue()
         end
@@ -128,7 +137,7 @@ local function Project(state,pending,now)
             end
         end
     end
-    return result,kept
+    return result,invalid
 end
 local function Tooltip(entry,state)
     local row,job=entry.Row,entry.Job
@@ -181,5 +190,27 @@ local function Tooltip(entry,state)
     if state.Upgrading then add(Reason('ChassisUpgrading'),Colors.Damage) end
     return lines
 end
-Export={Colors=Colors,Families=Families,Title=Title,Lists=Lists,Tooltip=Tooltip,Reason=Reason,Project=Project}
+-- Domain outcome state: the framework calls this after submission, settlement,
+-- dependency invalidation, dismissal and authoritative rebases. No UI side effects.
+local function Reconcile(data,event,authoritative,projected)
+    if not event.Intent then return data end
+    local key=event.Intent.ModuleId or event.Intent.Action
+    if not key then return data end
+    local previous=data.Problems[key]
+    if previous and previous.ID>event.ID then return data end
+    if event.Reason and event.Status~='dismissed' then
+        data.Problems[key]={ID=event.ID,Reason=event.Reason,Status=event.Status}
+    else data.Problems[key]=nil end
+    return data
+end
+local function Problem(data)
+    local latest
+    for _,problem in pairs(data.Problems) do
+        if not latest or problem.ID>latest.ID then latest=problem end
+    end
+    if not latest then return nil end
+    if latest.Status=='unknown' then return 'Outcome unknown: '..Reason(latest.Reason) end
+    return Reason(latest.Reason)
+end
+Export={Colors=Colors,Families=Families,Title=Title,Lists=Lists,Tooltip=Tooltip,Reason=Reason,Project=Project,Reconcile=Reconcile,Problem=Problem}
 return Export

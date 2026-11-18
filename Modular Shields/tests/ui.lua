@@ -1,3 +1,4 @@
+local Bindings=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/Bindings.lua'))()
 table.getn=table.getn or function(t) return #t end
 math.mod=math.mod or math.fmod
 function table.deepcopy(t)
@@ -71,6 +72,7 @@ function UI.CreateButtonStd(parent,texture,label)
 end
 local sharedUI,sharedStorage,exchangeUI,exchangeSim
 function import(path)
+        if string.find(path,'FireDragon/Bindings.lua',1,true) then return {Export=Bindings} end
     if path:find("FireDragon/InformationExchange.lua",1,true) then return {Export=exchangeUI} end
     if path:find("ModularShields/Messages.lua",1,true) then return {Export=loadCore("Messages.lua")} end
     if path=='/mods/FireDragonModLoader/lua/FireDragon/Storage.lua' then
@@ -107,7 +109,7 @@ local client
 local function flush()
     server.Flush()
     for _,packet in ipairs(packets) do client.Receive(packet) end
-    packets={}
+    packets={};Bindings.Step()
 end
 local paused,repairPaused=false,false
 local function sync()
@@ -352,5 +354,23 @@ local resizedViewport=card('power_1').Parent.Parent.FDScrollOwner
 check(resizedViewport~=nil,'scroll hierarchy exposes its owner')
 resizedViewport:RefreshScrollbars()
 check(not resizedViewport.HorizontalScrollbar.Hidden,'narrow shield window exposes horizontal scrollbar')
+selected={};Panel.Update()
+-- View destruction does not own submitted gameplay work.
+selected={{GetEntityId=function() return 1001 end}};Panel.Update()
+delayCallbacks=true;delayed={}
+card('impenetrable'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
+check(label('REMOVE') and #state.Queue==0,'removal projects before simulation dispatch')
+selected={};Panel.Update()
+selected={{GetEntityId=function() return 1001 end}};Panel.Update()
+check(label('REMOVE') and #delayed==1,'selection recreation retains the shared pending journal without resending')
+for _,request in ipairs(delayed) do deliver(request) end
+delayed={};Panel.Update()
+check(state.Queue[1] and state.Queue[1].Kind=='Remove' and label('REMOVE'),'recreated view transitions pending removal into the real job')
+local pause=assert(label('II')).Parent.Parent
+pause:HandleEvent{Type='ButtonPress',KeyCode=1,Modifiers={Left=true}}
+captured:OnRelease(pause.Left()+12,pause.Top()+12)
+check(label('>') and not paused,'pause displays desired state before the simulation replies')
+for _,request in ipairs(delayed) do deliver(request) end
+delayed={};Panel.Update();check(paused and label('>'),'pause reconciles with authoritative state')
 selected={};Panel.Update()
 print('PASS: '..count..' image UI/callback checks')

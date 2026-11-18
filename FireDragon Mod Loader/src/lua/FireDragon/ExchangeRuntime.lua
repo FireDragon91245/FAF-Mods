@@ -21,7 +21,7 @@ function Runtime.StartUI(bus)
     local session=tostring(GetSystemTimeSeconds())..':'..tostring(math.random(1,1000000))..':'..tostring(math.random(1,1000000))
     local transport=Transport.Attach(bus,{realm='UI',clock=clock,session=session,
         send=function(packet) SimCallback({Func='FireDragonExchange',Args=packet}) end})
-    import('/lua/ui/game/gamemain.lua').AddBeatFunction(function() transport.Tick() end)
+    import('/lua/ui/game/gamemain.lua').AddBeatFunction(function() transport.Tick();import('/mods/FireDragonModLoader/lua/FireDragon/Bindings.lua').Export.Step() end)
     transport.Hello()
     return transport
 end

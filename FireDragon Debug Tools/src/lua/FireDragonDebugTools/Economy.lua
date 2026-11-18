@@ -124,6 +124,7 @@ function Start()
         local brain=army and ArmyBrains[army]
         if not brain or brain:IsDefeated() then return {Accepted=false,Reason='MissingArmy'} end
         local accepted=Set(army,data.Resource,data.Enabled)
+        Publish(army) -- confirmation revision, including idempotent no-op requests
         return {Accepted=accepted,State=Snapshot(army)}
     end)
     for army in pairs(ArmyBrains) do Publish(army) end

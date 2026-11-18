@@ -7,19 +7,27 @@ local Messages=import('/mods/ModularShields/lua/ModularShields/Messages.lua').Ex
 local C=Model.Colors
 local view
 local Update
-local function Submit(v,action,value,cancelRequestId)
-    local ticket=Exchange.Sim.Request(Messages.Action,{EntityId=v.EntityId,Action=action,Value=value,CancelRequestId=cancelRequestId},{replyMode='First'})
-    table.insert(v.Actions,ticket);return ticket
+local Bindings=import('/mods/FireDragonModLoader/lua/FireDragon/Bindings.lua').Export
+local Shields=Bindings.DefineState(Exchange,{
+    stateTopic=Messages.Status,topic=Messages.Action,ordered=true,
+    payload=function(op,id) return {EntityId=id,Action=op.Action,Value=op.Value,CancelRequestId=op.CancelRequestId} end,
+    project=Model.Project,initialState={Problems={}},reconcile=Model.Reconcile,
+})
+local function Submit(v,action,value,cancelRequestId,moduleId,jobId)
+    local op=v.Model:Submit{Action=action,Value=value,ModuleId=moduleId or value,JobId=jobId,CancelRequestId=cancelRequestId}
+    Update();return op
 end
-local function Send(action,value) if view then return Submit(view,action,value) end end
+local function Send(action,value)
+    if not view then return end
+    if action=='pause' then value=not view.State.InstallPaused
+    elseif action=='repair' then value=not view.State.RepairPaused end
+    return Submit(view,action,value)
+end
 local function QueueRequest(v,action,row,job)
-    local now=GetSystemTimeSeconds()
     local jobId=job and job.JobId or nil
     local cancelRequestId=job and not jobId and job.RequestId or nil
     local value=row.Id;if action=='cancel' then value=jobId end
-    local ticket=Submit(v,action,value,cancelRequestId)
-    table.insert(v.Pending,{Action=action,ModuleId=row.Id,RequestId=ticket.Key,Ticket=ticket,JobId=jobId,CancelRequestId=cancelRequestId,Expires=now+5})
-    Update() -- render before the sim has processed installs or cancels
+    Submit(v,action,value,cancelRequestId,row.Id,jobId)
 end
 local function Text(control,value,color)
     if control.Value~=value then control:SetText(value);control.Value=value end
@@ -71,7 +79,7 @@ local function Create(state,id)
         prefKey='FireDragon_ModularShields_Window',x=(frame.Width()-780)/2,y=math.max(8,frame.Height()-650),width=780,height=450,minWidth=420,minHeight=260})
     local scroll=UI.Scroll(window.Client,{contentWidth=760,contentHeight=373});UI.Fill(scroll,window.Client,6)
     local p=scroll.Content
-    local v={Panel=p,Window=window,Scroll=scroll,EntityId=id,State=state,Cards={},Pending={},Actions={}}
+    local v={Panel=p,Window=window,Scroll=scroll,EntityId=id,State=state,Cards={},Model=Shields:Bind(window,id)}
     scroll.OnScroll=function()
         if v.Hovered and v.Hovered.Hover then v.Hovered.Hover:Hide();v.Hovered.Hovered=false end
         v.Hovered=nil;HideTip(v)
@@ -178,20 +186,10 @@ Update=function()
         view=Create(state,id)
     end
     local v=view
-    local active={}
-    for _,ticket in ipairs(v.Actions) do
-        local response=ticket:Poll()
-        if response then
-            v.RequestError=response.error or (response.value and not response.value.Accepted and response.value.Reason) or nil
-        end
-        if ticket:Status()=='pending' then table.insert(active,ticket)
-        elseif ticket.Error then v.RequestError=ticket.Error end
-    end
-    v.Actions=active
-    state,v.Pending=Model.Project(state,v.Pending,GetSystemTimeSeconds())
+    state=v.Model:Get() or state
+    v.RequestError=Model.Problem(v.Model:Status().state)
     v.State=state
     local live=Exchange.GetState(Messages.Live,id) or {HP=state.Stats.ShieldMaxHP,MaxHP=state.Stats.ShieldMaxHP,Regen=0,Damage=0,Status=''}
-    if v.RequestError then state.LastReason=v.RequestError end
     Text(v.Title,(state.Faction or 'UEF')..' / Modular Shield',C.Text)
     Text(v.HP,string.format('HP  %.0f / %.0f',live.HP,live.MaxHP),C.HP)
     Text(v.Regen,string.format('+%.0f HP/s  %s',live.Regen,live.Status),C.Regen)
@@ -211,7 +209,7 @@ Update=function()
     v.Pause:SetTextColor(state.InstallPaused and C.Cost or C.Text)
     v.Repair:SetTextColor(state.RepairPaused and C.Muted or C.Regen)
     local barrier=state.Barrier=='Active' and '  |  Barrier active' or (state.Barrier=='WarmingUp' and '  |  Barrier warming up' or '')
-    Text(v.Info,state.Used>state.Slots and 'Over capacity: excess modules are dormant. Restore mass storage or remove modules.' or (state.LastReason and Model.Reason(state.LastReason) or string.format('Radius %.0f  |  Assisting %d  |  %.0f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier),(state.LastReason or state.Used>state.Slots) and C.Damage or C.Muted)
+    Text(v.Info,state.Used>state.Slots and 'Over capacity: excess modules are dormant. Restore mass storage or remove modules.' or (v.RequestError or (state.LastReason and Model.Reason(state.LastReason)) or string.format('Radius %.0f  |  Assisting %d  |  %.0f work/s  |  %.0f E/s upkeep  |  Power %d',state.Stats.ShieldSize/2,state.Assistants,state.WorkRate,state.ActualEnergy,state.PowerProviders or 0)..barrier),(v.RequestError or state.LastReason or state.Used>state.Slots) and C.Damage or C.Muted)
     local faction=string.lower(state.Faction or 'UEF')
     if faction~='uef' and faction~='aeon' and faction~='cybran' and faction~='seraphim' then faction='uef' end
     local members,available=Model.Lists(state)
