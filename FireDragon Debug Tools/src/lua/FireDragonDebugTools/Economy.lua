@@ -9,9 +9,9 @@
 -- keeps a single GiveStorage bonus for one resource, so a mass boost wipes the energy
 -- boost (and vanilla's +100 energy) and vice versa.
 
-local SimUtils = import('/lua/simutils.lua')
-
-Callback = 'FireDragonDebugSetResource'
+local function exchange() return import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export end
+local Messages=import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Messages.lua').Export
+local started
 Helpers = { ENERGY = 'fdt0001', MASS = 'fdt0002' }
 
 local MaxStorageStat = { ENERGY = 'Economy_MaxStorage_Energy', MASS = 'Economy_MaxStorage_Mass' }
@@ -63,6 +63,7 @@ function Tick()
         if not brain or brain:IsDefeated() then
             for resource in pairs(state) do RemoveHelper(army, resource) end
             Armies[army] = nil
+            Publish(army)
         else
             for resource in pairs(state) do
                 active = true
@@ -97,21 +98,33 @@ function Set(army, resource, enabled)
     else
         RemoveHelper(army, resource)
     end
+    Publish(army)
     return true
 end
 
-function Snapshot(army, denied)
+function Snapshot(army)
     local state = Armies[army] or {}
-    return { Energy = state.ENERGY == true, Mass = state.MASS == true, Denied = denied or nil }
+    return { Energy = state.ENERGY == true, Mass = state.MASS == true }
 end
 
---- Handles the UI toggle for the army that sent it. Only allowed with cheats enabled
---- (the engine also reports single-player games as cheats enabled).
-function HandleCallback(data)
-    local army = SimUtils.GetCurrentCommandSourceArmy()
-    if not army or type(data) ~= 'table' then return end
-    local allowed = CheatsEnabled()
-    if allowed then Set(army, data.Resource, data.Enabled) end
-    Sync.FireDragonDebug = Sync.FireDragonDebug or {}
-    Sync.FireDragonDebug[tostring(army)] = Snapshot(army, not allowed)
+--- Retained economy events and a cheat-gated request handler share Exchange.
+function Publish(army)
+    exchange().UI.PublishState(Messages.Economy,tostring(army),Snapshot(army),{army=army})
+end
+function Start()
+    if started then return end
+    started=true
+    local bus=exchange()
+    bus.Expose(Messages.SetResource,{requests=true,authorize='Cheats'})
+    bus.Respond(Messages.SetResource,function(data,_,context)
+        if not Messages.ValidateResource(data) then
+            return {Accepted=false,Reason='InvalidMessage'}
+        end
+        local army=context.source and context.source.army
+        local brain=army and ArmyBrains[army]
+        if not brain or brain:IsDefeated() then return {Accepted=false,Reason='MissingArmy'} end
+        local accepted=Set(army,data.Resource,data.Enabled)
+        return {Accepted=accepted,State=Snapshot(army)}
+    end)
+    for army in pairs(ArmyBrains) do Publish(army) end
 end

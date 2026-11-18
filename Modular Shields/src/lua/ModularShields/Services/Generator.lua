@@ -34,13 +34,14 @@ local function MakeGenerator(Base)
             self:ReconcileModules()
             if inherited then Transfer.Restore(self,inherited) end
             Combat.Register(self)
+            import(root..'Services/DebugConfig.lua').Export.Track(self)
             Jobs.Start(self,R)
             self:ForkThread(function()
                 while not self.Dead do
                     local before=self.ModuleAssistantCount
                     Assist.Rate(self,R.Config)
                     Shield.TickRegen(self)
-                    if math.mod(GetGameTick(),2)==0 then self.Sync.ModularShieldLive=Telemetry.Snapshot(self) end
+                    if math.mod(GetGameTick(),2)==0 then import(root..'Services/Communication.lua').Export.Live(self,Telemetry.Snapshot(self)) end
                     if before~=self.ModuleAssistantCount then self:PublishModules() end
                     WaitTicks(1)
                 end
@@ -87,7 +88,7 @@ local function MakeGenerator(Base)
             if not self.ModuleStats.Capabilities.ground_barrier then
                 reason=self.ModuleStats.Dormant.impenetrable or 'NotInstalled'
             elseif not Combat.Operational(self) then reason='ShieldDown'
-            elseif self:GetAIBrain().EnergyDepleted or self:GetAIBrain():GetEconomyStored('ENERGY')<=0 then reason='NoPower'
+            elseif not (R.Config.Debug or {}).IgnoreResources and (self:GetAIBrain().EnergyDepleted or self:GetAIBrain():GetEconomyStored('ENERGY')<=0) then reason='NoPower'
             elseif not self.Loadout.Capabilities.legendary_power_support then reason='MissingAdjacentPower' end
             if reason then
                 self.BarrierActive=false;self.BarrierReadyTick=nil;self.BarrierRecords=nil;self.BarrierReason=reason
@@ -150,11 +151,11 @@ local function MakeGenerator(Base)
             self.ModuleRows=rows;self.ModuleRowsRevision=s.Revision;self.ModuleRowsStats=self.ModuleStats
             end
             local job = s.Queue[1]
-            self.Sync.ModularShield = { Used = R.Core.Used(s,R.Registry), Slots = R.Core.Capacity(s,R.Config),
+            local snapshot = { Used = R.Core.Used(s,R.Registry), Slots = R.Core.Capacity(s,R.Config),
                 BaseSlots=R.Config.Chassis[s.Chassis].Slots,BonusSlots=s.BonusSlots or 0,Neighbors=self.ModuleNeighbors,
                 Faction=self.Blueprint.ModularShield.Faction,RemovalSeconds=R.Config.RemovalSeconds,
                 Rows = rows, Stats = self.ModuleStats, Capabilities=s.Capabilities,
-                UIResponses=table.deepcopy(self.ModuleUIResponses or {}), LastReason = self.ModuleReason or false,
+                LastReason = self.ModuleReason or false,
                 InstallPaused = self.InstallPaused or false, RepairPaused = self.RepairPaused or false,
                 Assistants=self.ModuleAssistantCount or 0, WorkRate=self.ModuleWorkRate or R.Config.InstallRate,
                 Upgrading=self.ModuleUpgrading or false, Barrier=self.BarrierReason,
@@ -164,7 +165,8 @@ local function MakeGenerator(Base)
                 Queue=table.deepcopy(s.Queue), QueueCount=table.getn(s.Queue), RepairMass=self.ModuleRepairMass or 0,
                 Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,Kind=job.Kind or 'Install',
                     Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } or false }
-            self.Sync.ModularShieldLive=Telemetry.Snapshot(self)
+            local messages=import(root..'Services/Communication.lua').Export
+            messages.Status(self,snapshot);messages.Live(self,Telemetry.Snapshot(self))
         end,
         RequestModuleInstall = function(self,id)
             if not self.Loadout or self.Dead then return end
@@ -197,7 +199,7 @@ local function MakeGenerator(Base)
                 if self.Loadout.Queue[1] then self.Loadout.Queue[1].State = self.InstallPaused and 'Paused' or 'Queued' end
             elseif action == 'repair' then
                 self.RepairPaused = not self.RepairPaused
-                if self.RepairPaused then self.ModuleRepairMass=0;self.Sync.ModularShieldRepairMass=0 end
+                if self.RepairPaused then self.ModuleRepairMass=0 end
             end
             self.ModuleReason = reason and (reason.Code..(reason.Module and ': '..reason.Module or ''))
             self:ReconcileModules(); Jobs.Start(self,R)
@@ -253,6 +255,8 @@ local function MakeGenerator(Base)
             Base.OnGiven(self,newUnit)
         end,
         OnDestroy = function(self)
+            import(root..'Services/Communication.lua').Export.Remove(self)
+            import(root..'Services/DebugConfig.lua').Export.Untrack(self)
             AdjacencyEffects.Clear(self)
             Jobs.Stop(self);Assist.ReleaseAll(self)
             Combat.Unregister(self)
@@ -261,6 +265,8 @@ local function MakeGenerator(Base)
             Base.OnDestroy(self)
         end,
         OnKilled = function(self,instigator,damageType,overkillRatio)
+            import(root..'Services/Communication.lua').Export.Remove(self)
+            import(root..'Services/DebugConfig.lua').Export.Untrack(self)
             AdjacencyEffects.Clear(self)
             Jobs.Stop(self);Assist.ReleaseAll(self)
             Combat.Unregister(self)

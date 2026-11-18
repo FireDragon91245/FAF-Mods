@@ -1,6 +1,5 @@
 local function Tick(host, runtime)
     host.ModuleRepairMass=0
-    if host.Sync then host.Sync.ModularShieldRepairMass=0 end
     local shield, stats = host.MyShield, host.ModuleStats
     if host.RepairPaused or not shield or not shield:IsUp() or stats.RepairBudget <= 0 then return end
     local center, radius = shield:GetPosition(), stats.ShieldSize / 2
@@ -18,13 +17,14 @@ local function Tick(host, runtime)
             local missing = u:GetMaxHealth() - u:GetHealth()
             if missing > 0 and dx*dx+dy*dy+dz*dz <= radius*radius then
                 local perHP = runtime.Config.RepairFactor * (stats.RepairMassMultiplier or 1) * u.Blueprint.Economy.BuildCostMass / u:GetMaxHealth()
-                if perHP > 0 then
+                if perHP > 0 or (runtime.Config.Debug or {}).IgnoreResources then
                     local hp = math.min(missing, budget / (examined-offset+1))
                     -- TakeResource returns actual mass removed (audited in installed SimUtils).
                     -- No yield between withdrawal and healing: other repairers cannot spend it twice.
-                    local paid = host:GetAIBrain():TakeResource('Mass', hp * perHP)
+                    local free=(runtime.Config.Debug or {}).IgnoreResources
+                    local paid = not free and host:GetAIBrain():TakeResource('Mass', hp * perHP) or 0
                     host.ModuleRepairMass=host.ModuleRepairMass+math.max(0,paid)
-                    local restored = math.min(hp, math.max(0,paid) / perHP)
+                    local restored = free and hp or math.min(hp, math.max(0,paid) / perHP)
                     u:SetHealth(host, u:GetHealth() + restored)
                     budget = budget - restored
                 end
@@ -34,7 +34,6 @@ local function Tick(host, runtime)
     host.RepairCursor = math.mod((start + examined), count)
     -- Direct, exact withdrawals are not native economy events. Attribute their
     -- actual one-second rate to the selected-unit display without charging twice.
-    if host.Sync then host.Sync.ModularShieldRepairMass=host.ModuleRepairMass end
 end
 Export = { Tick = Tick }
 

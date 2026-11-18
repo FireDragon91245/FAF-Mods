@@ -5,6 +5,14 @@ local function Service()
     return Combat
 end
 Shield=Class(PreviousShield) {
+    OnEnergyDepleted=function(self)
+        if self.Owner and self.Owner.Blueprint.ModularShield
+            and import('/mods/ModularShields/lua/ModularShields/Runtime.lua').Export.Config.Debug.IgnoreResources then
+            self.NoEnergyToSustain=false
+            return
+        end
+        return PreviousShield.OnEnergyDepleted(self)
+    end,
     ApplyDamage=function(self,instigator,amount,vector,damageType,overspill)
         local host=self.Owner
         if not (host and host.Loadout) then return PreviousShield.ApplyDamage(self,instigator,amount,vector,damageType,overspill) end

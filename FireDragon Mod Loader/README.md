@@ -2,6 +2,16 @@ The loader also installs as a normal FAF core mod. Enable **FireDragon Mod Loade
 
 Version 9 makes notification delivery configurable (`Broadcast` or shared `Consume`), adds safe peek/take operations, and supports either all request replies or the first successful reply with exclusive responder claims.
 
+Version 11 handles UI-to-Sim configuration, notifications and request/reply inside
+the exchange. Mods declare Sim-owned values and exposed topics with authorization
+policies; the loader owns commands, authoritative mirrors, replies and sync. See
+the [cross-runtime API](src/INFORMATION_EXCHANGE_API.md#ui-and-sim-transport).
+
+Version 12 adds retained event snapshots with whole-value replacement, army/focus
+filtering and lifecycle removal. Shield actions, queue receipts, telemetry and
+debug economy traffic all use Exchange. Local UI/UI and Sim/Sim traffic uses the
+same configuration, notification and request APIs without crossing runtimes.
+
 # FireDragon Mod Loader
 
 Independent native resource loader for Supreme Commander: Forged Alliance / FAF.
@@ -12,7 +22,7 @@ no Modular Shields integration code; that mod is an ordinary manifest consumer.
 
 ## Installation
 
-Close the game, extract `FireDragonModLoader-v9.zip`, and run `install.cmd`.
+Close the game, extract `FireDragonModLoader-v13.zip`, and run `install.cmd`.
 The installer detects the FAF vault from the client's `fa_path.lua`. Nonstandard
 paths can be supplied to `install.ps1 -FafDirectory <path> -ModsDirectory <path>`.
 No game launch arguments, executable decorator or runtime compiler is required.

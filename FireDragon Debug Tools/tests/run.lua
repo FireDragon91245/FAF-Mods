@@ -35,30 +35,39 @@ local function newBrain(maxEnergy, maxMass)
     return brain
 end
 
+local Exchange=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/InformationExchange.lua'))()
+local Transport=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/ExchangeTransport.lua'))()
+local Messages=assert(loadfile('src/lua/FireDragonDebugTools/Messages.lua'))()
 local function newEconomy(brains, options)
-    options = options or {}
-    world = {}
-    local env = {
-        ArmyBrains = brains,
-        Sync = {},
-        CheatsEnabled = function() return options.cheats ~= false end,
-        IsDestroyed = function(unit) return unit.destroyed == true end,
-        GetSurfaceHeight = function() return 7 end,
-        import = function(path)
-            assert(path == '/lua/simutils.lua', path)
-            return { GetCurrentCommandSourceArmy = function() return options.army end }
-        end,
-    }
-    env.CreateUnitHPR = function(id, army, x, y, z)
-        local unit = { id = id, army = army, brain = brains[army], pos = { x, y, z } }
-        function unit:Destroy() self.destroyed = true end
-        table.insert(world, unit)
-        return unit
+    options=options or {};world={}
+    local bus,clientBus=Exchange.New({clock=function() return 0 end}),Exchange.New({clock=function() return 0 end})
+    local packets={}
+    local server=Transport.Attach(bus,{realm='Sim',clock=function() return 0 end,send=function(packet) packets[#packets+1]=packet end})
+    local client
+    local source={player=0,army=options.army,actor=options.army~=nil and brains[options.army]~=nil,cheats=options.cheats~=false}
+    client=Transport.Attach(clientBus,{realm='UI',session='economy-test',clock=function() return 0 end,
+        send=function(packet)
+            server.Receive(packet,source);server.Flush()
+            for _,response in ipairs(packets) do client.Receive(response) end;packets={}
+        end})
+    local env={ArmyBrains=brains,IsDestroyed=function(unit) return unit.destroyed==true end,
+        GetSurfaceHeight=function() return 7 end,
+        import=function(path)
+            if path:find('InformationExchange.lua',1,true) then return {Export=bus} end
+            if path:find('Messages.lua',1,true) then return {Export=Messages} end
+            error(path)
+        end}
+    env.CreateUnitHPR=function(id,army,x,y,z)
+        local unit={id=id,army=army,brain=brains[army],pos={x,y,z}}
+        function unit:Destroy() self.destroyed=true end
+        table.insert(world,unit);return unit
     end
-    env.forks = {}
-    env.ForkThread = function(fn) table.insert(env.forks, fn); return #env.forks end
-    env.WaitTicks = function() coroutine.yield() end
-    return loadModule('src/lua/FireDragonDebugTools/Economy.lua', env)
+    env.forks={};env.ForkThread=function(fn) table.insert(env.forks,fn);return #env.forks end
+    env.WaitTicks=function() coroutine.yield() end
+    local E=loadModule('src/lua/FireDragonDebugTools/Economy.lua',env)
+    E.client=clientBus
+    function E.Message(data) E.Start();return clientBus.Sim.Request(Messages.SetResource,data,{replyMode='First'}) end
+    return E
 end
 
 local function helpers(id)
@@ -138,20 +147,20 @@ check(not E.Set(1, 'FUEL', true) and table.getn(world) == 0, 'Unknown resources 
 -- Callback: command source army, cheat gating and sync snapshot.
 local brains = { newBrain(), newBrain() }
 E = newEconomy(brains, { army = 2 })
-E.HandleCallback({ Resource = 'MASS', Enabled = true })
-local snap = E.Sync.FireDragonDebug['2']
+E.Message({ Resource = 'MASS', Enabled = true })
+local snap = E.client.GetState(Messages.Economy,'2')
 check(snap and snap.Mass == true and snap.Energy == false and snap.Denied == nil, 'Callback toggles and syncs the sender army')
 check(table.getn(world) == 1 and world[1].army == 2, 'Only the sender army is affected')
 E = newEconomy({ newBrain() }, { army = 1, cheats = false })
-E.HandleCallback({ Resource = 'ENERGY', Enabled = true })
-snap = E.Sync.FireDragonDebug['1']
-check(snap.Denied == true and snap.Energy == false and #E.forks == 0 and table.getn(world) == 0, 'Without cheats the toggle is refused')
+E.Message({ Resource = 'ENERGY', Enabled = true })
+snap = E.client.GetState(Messages.Economy,'1')
+check(snap.Energy == false and #E.forks == 0 and table.getn(world) == 0, 'Without cheats the toggle is refused')
 E = newEconomy({ newBrain() }, { army = nil })
-E.HandleCallback({ Resource = 'ENERGY', Enabled = true })
-check(E.Sync.FireDragonDebug == nil, 'Observers are ignored')
+E.Message({ Resource = 'ENERGY', Enabled = true })
+check(table.getn(world)==0, 'Observer request creates no helpers')
 E = newEconomy({ newBrain() }, { army = 1 })
-E.HandleCallback('bad')
-check(E.Sync.FireDragonDebug == nil, 'Malformed data is ignored')
+E.Message('bad')
+check(table.getn(world)==0, 'Malformed resource message creates no helpers')
 -- Key bindings.
 local K = loadModule('src/lua/FireDragonDebugTools/Keys.lua')
 local b = K.Bindings({ ['Ctrl-A'] = 'select_all' })
@@ -162,22 +171,13 @@ check(b and b.F7 == K.KeyAction and b[K.DefaultKey] == nil, 'User bindings for t
 check(K.KeyAction.category == 'mods' and not string.find(K.ActionName, '-', 1, true), 'Action is valid for the keymapper')
 check(string.find(K.KeyAction.action, "/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Panel.lua", 1, true), 'Action opens the panel')
 
--- Hooks forward to the previous implementations.
-local handled
-local hook = loadModule('src/hook/lua/SimCallbacks.lua', {
-    DoCallback = function(name) return 'previous:' .. name end,
-    import = function() return { HandleCallback = function(data) handled = data end } end,
+-- Startup registers the exchange endpoint; no custom callback/sync hooks remain.
+local started=false
+local hook=loadModule('src/hook/lua/simInit.lua',{
+    BeginSession=function() return 'previous' end,
+    import=function() return {Start=function() started=true end} end,
 })
-check(hook.DoCallback('Other', {}) == 'previous:Other', 'Other callbacks reach vanilla')
-check(hook.DoCallback('FireDragonDebugSetResource', { x = 1 }) == nil and handled.x == 1, 'Debug callback is handled')
-
-local synced
-hook = loadModule('src/hook/lua/UserSync.lua', {
-    OnSync = function() return 'previous' end,
-    Sync = { FireDragonDebug = { ['1'] = {} } },
-    import = function() return { OnSync = function(data) synced = data end } end,
-})
-check(hook.OnSync() == 'previous' and synced['1'], 'Sync data reaches the panel')
+check(hook.BeginSession()=='previous' and started,'Sim startup registers the Exchange service')
 
 local actions = loadModule('src/hook/lua/keymap/keyactions.lua', { keyActions = {}, import = function() return K end })
 check(actions.keyActions[K.ActionName] == K.KeyAction, 'Key action is registered')

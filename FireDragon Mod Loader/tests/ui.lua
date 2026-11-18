@@ -2,7 +2,29 @@
 table.getn=table.getn or function(t) return #t end
 math.mod=math.mod or math.fmod
 local controls={}
-local function lazy(v) return setmetatable({Set=function(self,x) self.v=x end,v=v},{__call=function(self) if type(self.v)=='function' then return self.v() end;return self.v end}) end
+-- Cache computations and track dependencies like Maui; plain scalar changes do
+-- not invalidate layout. The previous always-recomputing mock hid slider bugs.
+local evaluating
+local function dirty(var)
+    if var.Dirty then return end
+    var.Dirty=true
+    for user in pairs(var.Users) do dirty(user) end
+end
+local function lazy(v)
+    local var={v=v,Dirty=true,Users={},Uses={}}
+    function var:Set(value) self.v=value;dirty(self) end
+    return setmetatable(var,{__call=function(self)
+        if self.Dirty then
+            for dependency in pairs(self.Uses) do dependency.Users[self]=nil end
+            self.Uses={}
+            local previous=evaluating;evaluating=self
+            self.Cached=type(self.v)=='function' and self.v() or self.v
+            evaluating=previous;self.Dirty=false
+        end
+        if evaluating then self.Users[evaluating]=true;evaluating.Uses[self]=true end
+        return self.Cached
+    end})
+end
 local function control(parent,name)
     local c={Parent=parent,Name=name,Children={}}
     for _,k in ipairs({'Left','Top','Width','Height','Depth'}) do c[k]=lazy(0) end
@@ -11,9 +33,18 @@ local function control(parent,name)
     function c:DisableHitTest() self.NoHit=true end
     function c:EnableHitTest() self.NoHit=false end
     function c:SetText(v) self.Text=v end
+    function c:GetText() return self.Text end
+    function c:SetFont() end
+    function c:SetForegroundColor() end
+    function c:SetBackgroundColor() end
+    function c:ShowBackground() end
+    function c:SetMaxChars() end
+    function c:EnableInput() self.InputEnabled=true end
+    function c:DisableInput() self.InputEnabled=false end
+    function c:AcquireFocus() self.Focused=true end
     function c:SetColor(v) self.Color=v end
-    function c:SetSolidColor(v) self.Color=v end
-    function c:SetTexture(v) self.Texture=v end
+    function c:SetSolidColor(v) self.Color=v;self.Texture=nil end
+    function c:SetTexture(v) self.Texture=v;self.Color=nil end
     function c:SetClipToWidth(v) self.Clip=v end
     function c:SetUV(...) self.UV={...} end
     function c:SetAlpha(v) self.Alpha=v end
@@ -33,22 +64,26 @@ local drag
 function PostDragger(_,_,d) drag=d end
 local UIUtil={bodyFont='body',SkinnableFile=function(p) return '/skin'..p end}
 function UIUtil.CreateText(parent,text) local c=control(parent);c.Text=text;return c end
-local ui,storage
+local ui,storage,exchange
 local savedPreferences={}
 function SavePreferences() end
 function import(path)
+    if path:find('FireDragon/InformationExchange.lua',1,true) then return {Export=exchange} end
     if path:find('FireDragon/Storage.lua',1,true) then return {Export=storage} end
     if path=='/lua/user/prefs.lua' then return {GetCurrentProfile=function() return savedPreferences end,GetFromCurrentProfile=function(k) return savedPreferences[k] end,SetToCurrentProfile=function(k,v) savedPreferences[k]=v end} end
     if path=='/lua/maui/layouthelpers.lua' then return {ScaleNumber=function(v) return v end,InvScaleNumber=function(v) return v end} end
     if path=='/lua/maui/group.lua' then return {Group=control} end
     if path=='/lua/maui/bitmap.lua' then return {Bitmap=control} end
+    if path=='/lua/maui/edit.lua' then return {Edit=control} end
     if path=='/lua/maui/dragger.lua' then return {Dragger=function() return control() end} end
     if path=='/lua/ui/uiutil.lua' then return UIUtil end
     if path:find('FireDragon/UI.lua',1,true) then return {Export=ui} end
+    if path:find('FireDragonDebugTools/Messages.lua',1,true) then return {Export=assert(loadfile('../FireDragon Debug Tools/src/lua/FireDragonDebugTools/Messages.lua'))()} end
     if path:find('Keys.lua',1,true) then return {DefaultKey='Alt-Shift-D'} end
     error(path)
 end
 storage=assert(loadfile('src/lua/FireDragon/Storage.lua'))()
+exchange=assert(loadfile('src/lua/FireDragon/InformationExchange.lua'))()
 ui=assert(loadfile('src/lua/FireDragon/UI.lua'))()
 local checks=0
 local function check(v,m) checks=checks+1;assert(v,m) end
@@ -63,6 +98,50 @@ w:SetResizable(false);check(w.ResizeGrip.Hidden,'size lock hides grip')
 local tabs=ui.Tabs(w.Client);ui.Fill(tabs,w.Client)
 local a=tabs:Add('a','First');local b=tabs:Add('b','Second');check(not a.Hidden and b.Hidden,'initial tab')
 tabs:Select('b');check(a.Hidden and not b.Hidden,'tab switch')
+check(tabs.Buttons.b.FDVisual.Texture:find('small_btn_down.dds',1,true),'selected tab uses native down texture, not a solid overlay')
+tabs.Buttons.b:HandleEvent({Type='MouseEnter'})
+check(tabs.Buttons.b.FDVisual.Texture:find('small_btn_down.dds',1,true),'selected tab keeps its texture on hover')
+local slider=ui.Slider(b,{width=200,min=0,max=10,step=1})
+local initialLeft=slider.Thumb.Left()
+slider:SetValue(5,true)
+check(slider.Thumb.Left()>initialLeft and slider.Thumb.Left()==slider.Left()+84,'slider invalidates cached thumb geometry')
+check(slider.Thumb.FDVisual.Texture:find('/slider02/slider_btn_up.dds',1,true),'slider uses vanilla thumb texture')
+local commits,previews=0,0
+local scrub=ui.Slider(b,{width=200,min=0,max=100,step=10,
+    onPreview=function() previews=previews+1 end,onChange=function() commits=commits+1 end})
+scrub:HandleEvent({Type='ButtonPress',MouseX=scrub.Left()+16+168*.2,KeyCode=1})
+drag:OnMove(scrub.Left()+16+168*.5,0)
+scrub:OnFrame(.2)
+check(commits==0 and previews==2,'drag previews update locally without submitting')
+drag:OnMove(scrub.Left()+16+168*.8,0);scrub:OnFrame(.29)
+check(commits==0 and scrub.Value==80,'motion restarts the idle delay')
+scrub:OnFrame(.02)
+check(commits==1,'idle sends one latest value')
+drag:OnRelease()
+check(commits==1,'release after idle does not repeat the same update')
+scrub:HandleEvent({Type='ButtonPress',MouseX=scrub.Left()+16+168*.4,KeyCode=1});drag:OnRelease()
+check(commits==2 and scrub.Value==40,'release immediately commits the final value')
+local status1,status2='pending','pending'
+local ticket1={Status=function() return status1 end}
+local ticket2={Status=function() return status2 end}
+local writes=0
+local optimistic=ui.Checkbox(b,{onCheck=function() writes=writes+1;return writes==1 and ticket1 or ticket2 end})
+optimistic:SetCheck(true);optimistic:SetCheck(false,true)
+check(optimistic.Checked,'pending checkbox ignores stale confirmed value')
+optimistic:SetCheck(false);status1='complete';optimistic:SetCheck(true,true)
+check(not optimistic.Checked,'older confirmation cannot overwrite a newer toggle')
+status2='failed';optimistic:SetCheck(true,true)
+check(optimistic.Checked,'rejected latest toggle restores confirmed value')
+status2='pending'
+local numeric=ui.NumberInput(b,{width=220,min=0,max=100,step=10,onChange=function() return ticket2 end})
+numeric:SetValue(30);numeric:SetValue(0,true)
+check(numeric.Value==30 and numeric.Input:GetText()=='30','pending numeric control preserves its local value')
+status2='complete';numeric:SetValue(30,true)
+numeric.Slider:HandleEvent({Type='ButtonPress',MouseX=numeric.Slider.Left()+16+100*.7,KeyCode=1})
+numeric:SetValue(30,true)
+check(numeric.Value==70 and numeric.Input:GetText()=='70','refresh cannot reset an unsubmitted slider preview')
+drag:OnRelease()
+check(numeric.Input.FrameParts[1].FDVisual.Texture:find('/game/chat_brd/',1,true),'numeric entry uses the vanilla frame')
 local scroll=ui.Scroll(b,{width=100,height=80,contentWidth=500,contentHeight=400})
 local icon=ui.Icon(scroll.Content,{x=80,y=60,width=60,height=60,texture='test'})
 icon:OnFrame(0)
@@ -150,7 +229,17 @@ local _,cx,cy=pointer(testWindow.CloseButton);drag:OnRelease(cx,cy)
 check(testWindow.Hidden and at(cx,cy)~=testWindow.CloseButton.FDHit,'close button hides window and input tree')
 -- Exercise the real debug UI: clicks remain secured sim requests and sync is silent.
 local sent={}
-function SimCallback(r) sent[#sent+1]=r end
+exchange.Sim={Request=function(topic,data)
+    sent[#sent+1]={Topic=topic,Args=data}
+    local once=false
+    return {Status=function() return 'complete' end,Poll=function()
+        if once then return nil end;once=true;return {value={Accepted=true}}
+    end}
+end}
+local function economy(data)
+    exchange.PublishState('FireDragonDebugTools.Economy','1',data)
+    for _,c in ipairs(controls) do if not c.Destroyed and c.FDWindow and c.OnFrame then c:OnFrame(.2) end end
+end
 function GetFocusArmy() return 1 end
 local env=setmetatable({}, {__index=_G})
 assert(loadfile('../FireDragon Debug Tools/src/lua/FireDragonDebugTools/Panel.lua','t',env))()
@@ -161,10 +250,10 @@ check(box~=nil,'debug window uses shared checkbox')
 check(box.Check.FDVisual.Texture:find('/CHECKBOX/d_up.dds',1,true) and box.Label.FDText=='Infinite Energy','checkbox uses square vanilla art and separate label')
 pointer(box,'MouseEnter');check(box.Check.FDVisual.Texture:find('d_over.dds',1,true),'checkbox hover graphic')
 local _,bx,by=pointer(box);check(sent[1].Args.Resource=='ENERGY' and sent[1].Args.Enabled,'debug click callback')
-env.OnSync({['1']={Energy=true,Mass=false}});check(box.Checked and #sent==1,'sync updates without feedback')
+economy({Energy=true,Mass=false});check(box.Checked and #sent==1,'sync updates without feedback')
 local debugWindow=box
 while not debugWindow.FDWindow do debugWindow=debugWindow.FDParent end
-check(debugWindow.FDWindow,'single page mounts directly under window without tabs')
+check(debugWindow.FDWindow,'debug tabs mount inside shared window')
 local _,dx,dy=pointer(debugWindow.CloseButton);drag:OnRelease(dx,dy);check(debugWindow.Hidden,'debug close routes correctly')
 for _,c in ipairs(controls) do if not c.Destroyed and c.Updates and c.OnFrame then c:OnFrame(0.2) end end
 check(debugWindow.FDVisual.Hidden and box.Check.FDVisual.Hidden and box.Label.FDVisual.Hidden,'closed debug window stays visually hidden across frame refreshes')
@@ -174,10 +263,80 @@ local function allVisualsHidden(node)
     return true
 end
 check(allVisualsHidden(debugWindow),'all window frame, label and icon renderers remain hidden after close')
-env.OnSync({['1']={Energy=false,Mass=true}})
+economy({Energy=false,Mass=true})
 check(box.Label.FDVisual.Hidden,'sync cannot reveal a closed window')
 env.Toggle()
 for _,c in ipairs(controls) do if not c.Destroyed and c.Updates and c.OnFrame then c:OnFrame(0.2) end end
 check(not debugWindow.FDVisual.Hidden and not box.Check.FDVisual.Hidden and not box.Label.FDVisual.Hidden,'reopening restores rendering')
 check(not debugWindow.Hidden and at(box.Left()+30,box.Top()+10)==box.FDHit,'debug reopen restores mouse input')
+local debugTabs
+for _,child in ipairs(debugWindow.Client.FDChildren) do if child.Pages then debugTabs=child end end
+check(debugTabs.Pages.vanilla and not debugTabs.Pages.shields,'Vanilla always visible; shields tab absent without parameter')
+local schema=assert(loadfile('../Modular Shields/src/lua/ModularShields/DebugParameters.lua'))()
+local Transport=assert(loadfile('src/lua/FireDragon/ExchangeTransport.lua'))()
+local simBus=exchange.New()
+local commands,packets={},{}
+local actor={army=1,player=0,actor=true,cheats=true}
+local server=Transport.Attach(simBus,{realm='Sim',clock=function() return 0 end,send=function(packet) packets[#packets+1]=packet end})
+local client=Transport.Attach(exchange,{realm='UI',session='debug-ui',clock=function() return 0 end,
+    send=function(packet) commands[#commands+1]=packet end})
+local function flush()
+    local batch=commands;commands={}
+    for _,packet in ipairs(batch) do server.Receive(packet,actor) end
+    server.Flush()
+    for _,packet in ipairs(packets) do client.Receive(packet) end
+    packets={}
+end
+local schemaOwner=simBus.PublishConfig(schema.SchemaKey,schema.Fields,'ReadOnly',nil,nil,{scope='Sim'})
+local published=simBus.PublishConfig(schema.Key,schema.Defaults(),'ReadWrite',function(values)
+    sent[#sent+1]={Config=values}
+end,schema.Validate,{scope='Sim',authorize='Cheats'})
+flush()
+debugWindow:OnFrame(.2)
+check(debugTabs.Pages.shields~=nil,'published parameter makes shield tab appear live')
+debugTabs:Select('shields')
+local numbers={}
+local ignore
+local function visit(node)
+    if node.Input and node.Slider then numbers[#numbers+1]=node end
+    if node.Checked~=nil and node.Label.FDText=='Ignore Resources' then ignore=node end
+    for _,child in ipairs(node.FDChildren or {}) do visit(child) end
+end
+visit(debugTabs.Pages.shields)
+check(#numbers==4 and ignore~=nil,'shield tab uses two boolean and four numeric controls')
+local hp,regen,slots,repair=numbers[1],numbers[2],numbers[3],numbers[4]
+hp.Input.Edit:SetText('4');hp.Input.Edit:OnEnterPressed('4')
+check(exchange.Get(schema.Key).HPMultiplier==1,'UI edit waits for Sim authority')
+debugWindow:OnFrame(.2)
+check(hp.Value==4 and hp.Slider.Value==4,'stale configuration refresh preserves pending numeric input')
+flush()
+check(hp.Value==4 and hp.Slider.Value==4 and exchange.Get(schema.Key).HPMultiplier==4,'text entry updates slider and publisher')
+hp.Input.Edit:SetText('99');hp.Input.Edit:OnEnterPressed('99')
+flush()
+check(hp.Value==10 and hp.Input:GetText()=='10','text value clamps to HP maximum')
+local sentBefore=#sent
+hp.Input.Edit:SetText('bad');hp.Input.Edit:OnEnterPressed('bad')
+check(hp.Input:GetText()=='10' and #sent==sentBefore,'invalid numeric text resets without publishing')
+regen.Slider:HandleEvent({Type='ButtonPress',MouseX=regen.Slider.Left()+5+(regen.Slider.Width()-10)*.345,KeyCode=1})
+drag:OnRelease()
+flush()
+check(math.mod(regen.Value,100)==0 and exchange.Get(schema.Key).AdditionalRegen==regen.Value,'regen slider publishes in steps of 100')
+slots.Input.Edit:SetText('17');slots.Input.Edit:OnEnterPressed('17')
+repair.Input.Edit:SetText('400');repair.Input.Edit:OnEnterPressed('400')
+flush()
+check(exchange.Get(schema.Key).AdditionalSlots==17 and exchange.Get(schema.Key).AdditionalRepair==400,'slots and repair text controls publish independently')
+ignore:SetCheck(true)
+debugWindow:OnFrame(.2)
+check(ignore.Checked and not exchange.Get(schema.Key).IgnoreResources,'pending shield checkbox stays checked before acknowledgement')
+flush()
+check(exchange.Get(schema.Key).IgnoreResources,'boolean shield control edits shared ReadWrite config')
+actor.cheats=false;ignore:SetCheck(false);debugWindow:OnFrame(.2)
+check(not ignore.Checked,'pending disabled checkbox does not flash back on')
+flush();debugWindow:OnFrame(.2)
+check(ignore.Checked and exchange.Get(schema.Key).IgnoreResources,'denied edit is restored from authoritative values')
+check(exchange.ConfigStatus(schema.Key).denied,'UI reads denial from generic exchange status')
+debugTabs:Select('vanilla');hp.Input:OnFrame()
+check(hp.Input.Edit.Hidden,'native text input hides when its tab is hidden')
+published:Close();schemaOwner:Close();flush();debugWindow:OnFrame(.2)
+check(not debugTabs.Pages.shields and debugTabs.Pages.vanilla,'removing parameter removes only shield tab')
 print('PASS: '..checks..' shared UI and debug window checks')

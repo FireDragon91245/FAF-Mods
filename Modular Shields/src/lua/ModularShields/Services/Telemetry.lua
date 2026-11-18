@@ -31,7 +31,7 @@ local function Snapshot(host)
     end
     return {HP=hp,MaxHP=max,Regen=regen,BaseRegen=base,ModuleRegen=module,NeighborRegen=neighbor,
         BaseHP=stats.BaseHP or stats.ShieldMaxHP,ModuleHP=stats.ModuleHP or 0,NeighborHP=stats.NeighborHP or 0,
-        Damage=total/(Window/10),DamageWindow=Window/10,Status=status}
+        Damage=total/(Window/10),DamageWindow=Window/10,Status=status,RepairMass=host.ModuleRepairMass or 0}
 end
 Export={Damage=Damage,Snapshot=Snapshot}
 return Export

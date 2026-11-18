@@ -19,6 +19,7 @@ end
 local R=loadCore('Bootstrap.lua').Build(loadCore)
 local controls={}
 local preferences={}
+function SavePreferences() end
 local clock=0
 function GetSystemTimeSeconds() return clock end
 function GetFocusArmy() return 1 end
@@ -65,9 +66,15 @@ function UI.CreateButtonStd(parent,texture,label)
     assert(texture=='/scx_menu/small-btn/small','Use known native button textures')
     local b=control('button',parent);b.label=UI.CreateText(b,label);b.label:DisableHitTest();return b
 end
-local sharedUI
+local sharedUI,sharedStorage,exchangeUI,exchangeSim
 function import(path)
-    if path=='/lua/user/prefs.lua' then return {GetFromCurrentProfile=function(k) return preferences[k] end,SetToCurrentProfile=function(k,v) preferences[k]=v end} end
+    if path:find("FireDragon/InformationExchange.lua",1,true) then return {Export=exchangeUI} end
+    if path:find("ModularShields/Messages.lua",1,true) then return {Export=loadCore("Messages.lua")} end
+    if path=='/mods/FireDragonModLoader/lua/FireDragon/Storage.lua' then
+        if not sharedStorage then sharedStorage=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/Storage.lua'))() end
+        return {Export=sharedStorage}
+    end
+    if path=='/lua/user/prefs.lua' then return {GetCurrentProfile=function() return preferences end,GetFromCurrentProfile=function(k) return preferences[k] end,SetToCurrentProfile=function(k,v) preferences[k]=v end} end
     if path=='/mods/FireDragonModLoader/lua/FireDragon/UI.lua' then
         if not sharedUI then sharedUI=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/UI.lua'))() end
         return {Export=sharedUI}
@@ -87,8 +94,18 @@ state.Rules=R.Core
 local selected={{GetEntityId=function() return 1001 end}}
 function GetSelectedUnits() return selected end
 UnitData={[1001]={OtherMod={Keep=true}}}
-function OnSync() UnitData=table.merged(UnitData,Sync.UnitData) end
-assert(loadfile('src/hook/lua/UserSync.lua'))()
+local Exchange=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/InformationExchange.lua'))()
+local Transport=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/ExchangeTransport.lua'))()
+local Messages=loadCore('Messages.lua')
+exchangeUI=Exchange.New({clock=function() return clock end});exchangeSim=Exchange.New({clock=function() return clock end})
+local packets={}
+local server=Transport.Attach(exchangeSim,{realm='Sim',clock=function() return clock end,send=function(packet) packets[#packets+1]=packet end})
+local client
+local function flush()
+    server.Flush()
+    for _,packet in ipairs(packets) do client.Receive(packet) end
+    packets={}
+end
 local paused,repairPaused=false,false
 local function sync()
     local rows={}
@@ -102,19 +119,22 @@ local function sync()
             Quote=R.Core.Quote(state,id,R.Registry,R.Config)}
     end
     local job=state.Queue[1]
-    Sync={UnitData={[1001]={ModularShield={Rows=rows,Used=R.Core.Used(state,R.Registry),Slots=R.Core.Capacity(state,R.Config),Faction='CYBRAN',RemovalSeconds=5,
+    local status={Rows=rows,Used=R.Core.Used(state,R.Registry),Slots=R.Core.Capacity(state,R.Config),Faction='CYBRAN',RemovalSeconds=5,
         BaseSlots=R.Config.Chassis[state.Chassis].Slots,BonusSlots=state.BonusSlots or 0,
-        UIResponses=table.deepcopy(owned and owned.ModuleUIResponses or {}),Capabilities=state.Capabilities,Queue=table.deepcopy(state.Queue),QueueCount=#state.Queue,Stats=R.Stats.Calculate(state,R.Registry,R.Config),
+        Capabilities=state.Capabilities,Queue=table.deepcopy(state.Queue),QueueCount=#state.Queue,Stats=R.Stats.Calculate(state,R.Registry,R.Config),
         InstallPaused=paused,RepairPaused=repairPaused,ActualEnergy=100,Assistants=0,WorkRate=40,Barrier='NotInstalled',
-        Job=job and {Id=job.JobId,Module=job.ModuleId,Progress=job.PaidWork/job.Quote.Work,State=job.State} or false},
-        ModularShieldLive={HP=8000,MaxHP=10000,Regen=100,Damage=240,Status='Regenerating'}}}}
-    OnSync()
+        Job=job and {Id=job.JobId,Module=job.ModuleId,Progress=job.PaidWork/job.Quote.Work,State=job.State} or false}
+    exchangeSim.UI.PublishState(Messages.Status,1001,status,{army=1})
+    exchangeSim.UI.PublishState(Messages.Live,1001,{HP=8000,MaxHP=10000,Regen=100,Damage=240,Status='Regenerating'},{army=1})
+    flush()
 end
 local sent={}
 local delayed={}
 local delayCallbacks=false
 owned={ModuleAction=function(_,action,value)
     local created
+    if owned.Reject then return nil,{Code='Rejected'} end
+    if owned.RejectCancel and action=='cancel' then return {Code='Rejected'} end
     if action=='install' then created=assert(R.Core.RequestInstall(state,value,R.Registry,R.Config))
     elseif action=='remove' then assert(R.Core.RequestUninstall(state,value,R.Registry,R.Config))
     elseif action=='cancel' then assert(not R.Core.RequestCancel(state,value,R.Registry))
@@ -124,15 +144,27 @@ owned={ModuleAction=function(_,action,value)
     return created
 end}
 owned.PublishModules=sync
+owned.Loadout=state;owned.EntityId=1001;owned.Army=1
 local secureCalled=false
-function SecureUnits(units) secureCalled=true;assert(units[1]==owned);return units end
-function DoCallback() error('Unexpected fallback') end
-assert(loadfile('src/hook/lua/SimCallbacks.lua'))()
-function SimCallback(request,withSelection)
-    assert(withSelection==true)
-    sent[#sent+1]=request
-    if delayCallbacks then delayed[#delayed+1]=request else DoCallback(request.Func,request.Args,{owned}) end
+local commEnv=setmetatable({GetEntityById=function(id) return id==1001 and owned or nil end,
+    import=function(path)
+        if path:find('FireDragon/InformationExchange.lua',1,true) then return {Export=exchangeSim} end
+        if path=='/lua/SimCallbacks.lua' then return {SecureUnits=function(units)
+            secureCalled=true;assert(units[1]==1001);return {owned}
+        end} end
+        return import(path)
+    end}, {__index=_G})
+assert(loadfile('src/lua/ModularShields/Services/Communication.lua','t',commEnv))()
+commEnv.Export.Start()
+local function deliver(request)
+    server.Receive(request,{army=1,player=0,actor=true,cheats=false});flush()
 end
+local function requestKey(packet) return packet.session..'/'..tostring(packet.id) end
+client=Transport.Attach(exchangeUI,{realm='UI',session='shield-ui-test',clock=function() return clock end,
+    send=function(request)
+        sent[#sent+1]=request
+        if delayCallbacks then delayed[#delayed+1]=request else deliver(request) end
+    end})
 local Panel=loadCore('UI/Panel.lua')
 local Model=loadCore('UI/Model.lua')
 local count=0
@@ -167,7 +199,7 @@ card('range_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 check(#delayed==3 and not card('power_3').Hidden,'rapid clicks queue prerequisites and another family without waiting')
 Panel.Update();Panel.Update()
 check(first.Top()==dock.Top()+158 and #state.Queue==0,'stale snapshots preserve pending entries')
-for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+for _,request in ipairs(delayed) do deliver(request) end
 delayed={};delayCallbacks=false;Panel.Update()
 check(#state.Queue==3 and label('0%'),'acknowledgements replace pending indicators with real jobs')
 delayCallbacks=true
@@ -176,7 +208,7 @@ check(#state.Queue==3 and first.Top()>dock.Top()+158 and card('power_2').Hidden,
 check(card('range_1').Top()==dock.Top()+158,'cancel keeps unrelated queued upgrades')
 Panel.Update();Panel.Update()
 check(first.Top()>dock.Top()+158,'stale snapshots do not restore a cancelled job')
-for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+for _,request in ipairs(delayed) do deliver(request) end
 delayed={};delayCallbacks=false;Panel.Update()
 check(#state.Queue==1 and state.Queue[1].ModuleId=='range_1','cancel acknowledgement matches the projected queue')
 state.Queue={};state.Revision=state.Revision+1;sync();Panel.Update()
@@ -184,7 +216,7 @@ state.Queue={};state.Revision=state.Revision+1;sync();Panel.Update()
 delayCallbacks=true
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 local rejected=delayed[1]
-owned.ModuleUIResponses[rejected.Args.RequestId]=true
+owned.Reject=true;deliver(rejected);owned.Reject=false
 state.Queue={};sync();Panel.Update()
 check(card('power_1').Top()>dock.Top()+158 and card('power_2').Hidden,'rejected request returns to upgrades and hides its dependent level')
 delayed={}
@@ -195,21 +227,22 @@ delayed={};clock=7
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 card('power_2'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
-check(#delayed==3 and delayed[3].Args.CancelRequestId==delayed[1].Args.RequestId,'pending install can be cancelled using its request token before it has a job id')
+check(#delayed==3 and delayed[3].value.CancelRequestId==requestKey(delayed[1]),'pending install can be cancelled using its request token before it has a job id')
 check(card('power_1').Top()>dock.Top()+158 and card('power_2').Hidden,'pre-ack cancellation removes pending dependents immediately')
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Left=true}})
-local replacementToken=delayed[4].Args.RequestId
+local replacementToken=requestKey(delayed[4])
 local originalInstall=table.remove(delayed,1)
-DoCallback(originalInstall.Func,originalInstall.Args,{owned});Panel.Update()
+deliver(originalInstall);Panel.Update()
 check(#state.Queue==1 and card('power_1').Top()==dock.Top()+158,'old install acknowledgement does not consume a replacement install request')
-for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+for _,request in ipairs(delayed) do deliver(request) end
 delayed={};Panel.Update()
-check(#state.Queue==1 and state.Queue[1].ModuleId=='power_1' and state.Queue[1].UIRequestId==replacementToken,'install-cancel-reinstall processes correctly in send order')
+check(#state.Queue==1 and state.Queue[1].ModuleId=='power_1' and state.Queue[1].UIRequestId==replacementToken,
+    'install-cancel-reinstall processes correctly in send order: '..tostring(#state.Queue)..' / '..tostring(state.Queue[1] and state.Queue[1].UIRequestId)..' / '..replacementToken)
 -- A rejected cancel must restore the original job after its explicit response.
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
 check(card('power_1').Top()>dock.Top()+158,'confirmed job cancellation projects immediately')
 local rejectedCancel=delayed[1]
-owned.ModuleUIResponses[rejectedCancel.Args.RequestId]=true;sync();Panel.Update()
+owned.RejectCancel=true;deliver(rejectedCancel);owned.RejectCancel=false;sync();Panel.Update()
 check(card('power_1').Top()==dock.Top()+158 and #state.Queue==1,'rejected cancellation restores authoritative job')
 delayed={}
 card('power_1'):HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
@@ -224,7 +257,7 @@ check(image.Texture:find('cybran_power_1.dds',1,true),'Module icon uses its fact
 hover(power1)
 check(not tip.Hidden and label('+2500 maximum shield HP').Color==Model.Colors.HP,'Native hover popup shows capacity change in blue')
 click(power1)
-check(secureCalled and sent[1].Args.Action=='install' and #state.Queue==1,'Image click reaches the secured install callback')
+check(secureCalled and sent[1].value.Action=='install' and #state.Queue==1,'Image click reaches the secured install callback')
 check(power1.Top()==dock.Top()+158 and image.Texture:find('_dim.dds',1,true),'Queued icon moves to modules row and is grayed out')
 check(label('0%') and not label('0%').Hidden,'Pending icon overlays installation percentage')
 check(not card('power_2').Hidden,'Queuing a prerequisite exposes the next upgrade')
@@ -234,7 +267,7 @@ check(label('50%') and not label('50%').Hidden,'Paid progress refreshes the imag
 click(card('power_2'))
 click(power1,true)
 check(#state.Queue==0 and power1.Top()==dock.Top()+231 and card('power_2').Hidden,'Right-click cancels pending module and dependent queue')
-check(not UnitData[1001].ModularShield.Job and #UnitData[1001].ModularShield.Queue==0,'Snapshot merge clears cancelled job and queue tails')
+check(not exchangeUI.GetState(Messages.Status,1001).Job and #exchangeUI.GetState(Messages.Status,1001).Queue==0,'Snapshot merge clears cancelled job and queue tails')
 check(UnitData[1001].OtherMod.Keep,'Module snapshot leaves unrelated unit data intact')
 click(power1);job=state.Queue[1];job.PaidWork=job.Quote.Work
 assert(not R.Core.Complete(state,job,R.Registry,R.Config));sync();Panel.Update()
@@ -249,7 +282,7 @@ power1:HandleEvent({Type='ButtonPress',Modifiers={Right=true}})
 check(state.Queue[1].Kind=='Remove' and state.Installed.power_1 and not label('REMOVE'),'cancelling removal immediately clears its overlay while keeping the module installed')
 Panel.Update()
 check(not label('REMOVE'),'stale snapshots do not revive removal overlay')
-for _,request in ipairs(delayed) do DoCallback(request.Func,request.Args,{owned}) end
+for _,request in ipairs(delayed) do deliver(request) end
 delayed={};delayCallbacks=false;Panel.Update()
 check(state.Installed.power_1 and #state.Queue==0,'Right-clicking removal cancels it and keeps installed module')
 click(power1,true);job=state.Queue[1];job.PaidWork=job.Quote.Work
@@ -263,8 +296,8 @@ check(label('Deflects crashing aircraft and selected').Parent.Hidden,'Tooltip ch
 hover(card('impenetrable'))
 check(label('[missing] Deflector') and label('[missing] Atomized (nuclear containment)') and label('[missing] Ballistic (missile defense)'),'Impenetrable lists all three special-module requirements separately')
 check(label('T1 generators and all storage are excluded.'),'Impenetrable explains the T2+ generator requirement and excludes storage')
-UnitData[1001].ModularShieldLive={HP=8000,MaxHP=13500,Regen=30,Damage=240,Status='Module regen only',
-    BaseHP=10000,ModuleHP=2500,NeighborHP=1000,BaseRegen=0,ModuleRegen=30,NeighborRegen=0}
+exchangeSim.UI.PublishState(Messages.Live,1001,{HP=8000,MaxHP=13500,Regen=30,Damage=240,Status='Module regen only',
+    BaseHP=10000,ModuleHP=2500,NeighborHP=1000,BaseRegen=0,ModuleRegen=30,NeighborRegen=0},{army=1});flush()
 Panel.Update()
 check(label('+10000 from initial HP') and label('+2500 from module HP') and label('+1000 from neighbor storage HP'),'HP source rows use additive amounts without current/max formatting')
 check(label('+0 HP/s from non-damage vanilla regen') and label('+30 HP/s from module regen (under fire too)') and label('+0 HP/s from neighbor power regen'),'Live regeneration source rows show only module regen during damage')
@@ -298,7 +331,7 @@ captured:OnRelease(close.Left()+12,close.Top()+12)
 check(window.Hidden and tip.Hidden,'Shield close button hides its window and tooltip')
 selected={};Panel.Update()
 check(window.Destroyed and dock.Destroyed and tip.Destroyed,'Deselecting cleans up dock and floating tooltip')
-local saved=preferences['FireDragon_ModularShields_Window']
+local saved=preferences.FireDragonStorage['FireDragon.UI']['FireDragon_ModularShields_Window']
 selected={{GetEntityId=function() return 1001 end}};Panel.Update()
 local reopened=find(function(c) return c.Name=='Modular Shield Window' end)
 check(reopened.Left()==saved.left and reopened.Top()==saved.top and reopened.Width()==saved.width and reopened.Height()==saved.height,'shield reselection restores window position and size')

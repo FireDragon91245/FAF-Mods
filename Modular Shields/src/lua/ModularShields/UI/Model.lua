@@ -104,7 +104,7 @@ local function Project(state,pending,now)
     local kept={}
     for _,request in ipairs(pending) do
         local row=rows[request.ModuleId]
-        local acknowledged=(state.UIResponses or {})[request.RequestId]
+        local acknowledged=request.Ticket and request.Ticket:Status()~='pending'
         if not acknowledged and now<request.Expires and row then
             table.insert(kept,request)
             if request.Action=='cancel' then cancel(request)

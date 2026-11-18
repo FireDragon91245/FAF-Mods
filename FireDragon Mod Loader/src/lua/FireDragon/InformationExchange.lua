@@ -1,4 +1,4 @@
--- Shared within one Lua runtime through FAF's import cache. No background threads.
+-- Local core shared through FAF's import cache; loader hooks attach UI/Sim transport.
 local Exchange = {}
 local plainMetatable = getmetatable({})
 local function size(t)
@@ -68,7 +68,7 @@ function Exchange.New(options)
     assert(type(clock) == 'function' and type(onError) == 'function', 'Invalid exchange options')
     local bus = {}
     local configs, topics, requests = {}, {}, {}
-    local eventSettings, eventStates = {}, {}
+    local eventSettings, eventStates, exposures, states = {}, {}, {}, {}
     local nextID = 0
     local function id() nextID = nextID + 1; return nextID end
     local function report(err) pcall(onError, tostring(err)) end
@@ -80,10 +80,11 @@ function Exchange.New(options)
     local function current(k)
         local entry = configs[k]; assert(entry, 'Configuration key is not published: ' .. tostring(k)); return entry
     end
-    local function write(entry, path, value, owner)
+    local function write(entry, path, value, owner, source)
         assert(configs[entry.key] == entry, 'Publication is closed')
         assert(owner or entry.mode == 'ReadWrite', 'Configuration is ReadOnly')
         assert(not entry.notifying, 'Cannot write the same publication from its change callback')
+        if entry.remote and not owner then return bus._remoteWrite(entry.key,pathCopy(path),copy(value)) end
         value = copy(value)
         local old = entry.value
         local updated = value
@@ -97,13 +98,16 @@ function Exchange.New(options)
             parent[path[size(path)]] = value
             updated = copy(updated) -- validate final depth before committing
         end
+        if entry.validate then assert(entry.validate(copy(updated)) ~= false, 'Configuration validation rejected the value') end
+        if entry.declaration.scope=='Sim' and bus._configValidate then bus._configValidate(updated,entry.key,entry.mode) end
         if equal(old, updated) then return false end
         entry.value = updated; entry.version = entry.version + 1
         if entry.callback then
             entry.notifying = true
-            invoke(entry.callback, copy(updated), copy(old), {key = entry.key, path = copy(path), version = entry.version})
+            invoke(entry.callback, copy(updated), copy(old), {key = entry.key, path = copy(path), version = entry.version,source=source})
             entry.notifying = false
         end
+        if bus._configChanged then bus._configChanged(entry.key) end
         return true
     end
     local function view(entry, path, owner)
@@ -123,13 +127,19 @@ function Exchange.New(options)
             __metatable = 'InformationExchange view',
         })
     end
-    function bus.PublishConfig(k, value, mode, callback)
+    function bus.PublishConfig(k, value, mode, callback, validate, declaration)
         name(k); assert(not configs[k], 'Configuration key already published')
         mode = mode or 'ReadOnly'
         assert(mode == 'ReadOnly' or mode == 'ReadWrite', 'Expected ReadOnly or ReadWrite')
         assert(callback == nil or type(callback) == 'function', 'Invalid configuration callback')
         assert(mode ~= 'ReadWrite' or callback, 'ReadWrite requires a publisher callback')
-        local entry = {key = k, value = copy(value), mode = mode, callback = callback, version = 0}
+        assert(validate == nil or type(validate) == 'function', 'Invalid configuration validator')
+        value = copy(value)
+        if validate then assert(validate(copy(value)) ~= false, 'Configuration validation rejected the value') end
+        declaration=declaration or {}
+        assert(declaration.scope==nil or declaration.scope=='Local' or declaration.scope=='Sim','Expected Local or Sim config scope')
+        local entry = {key = k, value = value, mode = mode, callback = callback, validate = validate, version = 0,declaration=declaration}
+        if declaration.scope=='Sim' and bus._configValidate then bus._configValidate(value,k,mode) end
         configs[k] = entry
         local owner = {}
         function owner:Set(value) return write(entry, {}, value, true) end
@@ -138,8 +148,11 @@ function Exchange.New(options)
         function owner:Close()
             assert(not entry.notifying, 'Cannot close a publication from its change callback')
             if configs[k] ~= entry then return false end
-            configs[k] = nil; return true
+            configs[k] = nil
+            if bus._configChanged then bus._configChanged(k) end
+            return true
         end
+        if bus._configChanged then bus._configChanged(k) end
         return owner
     end
     function bus.HasConfig(k) name(k); return configs[k] ~= nil end
@@ -147,6 +160,17 @@ function Exchange.New(options)
     function bus.View(k) name(k); return view(current(k), {}, false) end
     function bus.Set(k, value) name(k); return write(current(k), {}, value, false) end
     function bus.SetPath(k, path, value) name(k); return write(current(k), pathCopy(path), value, false) end
+    -- Transport integration stays inside the loader; callbacks receive trusted source metadata.
+    bus._Copy=copy;bus._Entries=configs;bus._Exposures=exposures
+    function bus._SetRemote(k,path,value,source) return write(current(k),pathCopy(path),value,false,source) end
+    function bus.Expose(topic,contract)
+        name(topic);assert(type(contract)=='table' and not exposures[topic],'Invalid or duplicate remote topic')
+        assert(string.len(topic)<=160,'Remote topic exceeds 160 characters')
+        assert(contract.notifications==true or contract.requests==true,'Expose notifications and/or requests')
+        local entry={notifications=contract.notifications==true,requests=contract.requests==true,authorize=contract.authorize}
+        exposures[topic]=entry
+        return {Close=function() if exposures[topic]~=entry then return false end;exposures[topic]=nil;return true end}
+    end
 
     local function subscribe(topic, kind, callback)
         name(topic)
@@ -201,7 +225,7 @@ function Exchange.New(options)
             if count == 0 then return nil end
             local result = {}
             for k, value in pairs(items[head].value) do
-                if k == 'payload' then result[k] = copy(value) else result[k] = value end
+                if k == 'payload' or k=='source' then result[k] = copy(value) else result[k] = value end
             end
             return result
         end
@@ -255,7 +279,7 @@ function Exchange.New(options)
         end
         local q = queue(capacity or state.capacity)
         local entry, close = subscribe(topic, 'event', function(payload, context)
-            q.push({payload = payload, messageID = context.messageID})
+            q.push({payload = payload, messageID = context.messageID,source=context.source})
         end)
         q.ID = entry.id
         function q:Close() local changed = close(); q.clear(); return changed end
@@ -272,7 +296,7 @@ function Exchange.New(options)
                 if not head or head.messageID ~= message.messageID then break end
                 if entry.active and entry.callback then
                     local taken = false
-                    local context = {messageID = message.messageID}
+                    local context = {messageID = message.messageID,source=copy(message.source)}
                     function context.Take()
                         if taken then return false end
                         taken = state.queue:Poll(message.messageID) ~= nil
@@ -295,19 +319,19 @@ function Exchange.New(options)
         assert(state.delivery == 'Consume', 'Pump requires a Consume topic')
         return dispatchConsume(state, listeners(topic, 'event'))
     end
-    function bus.Publish(topic, payload)
+    function bus.Publish(topic, payload, source)
         payload = copy(payload)
         local state = eventState(topic)
         local entries = listeners(topic, 'event')
         if state.delivery == 'Consume' then
-            state.queue.push({payload = payload, messageID = id()})
+            state.queue.push({payload = payload, messageID = id(),source=source})
             return dispatchConsume(state, entries)
         end
         local delivered, errors = 0, 0
         local messageID = id()
         for _, entry in ipairs(entries) do
             if entry.active then
-                local ok = invoke(entry.callback, copy(payload), {messageID = messageID})
+                local ok = invoke(entry.callback, copy(payload), {messageID = messageID,source=copy(source)})
                 delivered = delivered + 1; if not ok then errors = errors + 1 end
             end
         end
@@ -323,7 +347,7 @@ function Exchange.New(options)
         local entry, close = subscribe(topic, 'request', function(payload, reply, context)
             q.push({payload = payload, Reply = reply, IsOpen = context.IsOpen,
                 TryClaim = context.TryClaim, ReleaseClaim = context.ReleaseClaim,
-                requestID = context.requestID, messageID = context.requestID},
+                requestID = context.requestID, messageID = context.requestID,source=context.source},
                 function() context.Fail('queue_overflow') end)
         end)
         q.ID = entry.id
@@ -374,7 +398,7 @@ function Exchange.New(options)
                 else
                     local function reply(value) return finish(responder, value, nil) end
                     local context = {
-                        requestID = ticket.ID,
+                        requestID = ticket.ID,source=copy(requestOptions.source),
                         IsOpen = function()
                             return refresh() == 'pending' and pending[responder] == true
                                 and (replyMode == 'All' or not claimedBy or claimedBy == responder)
@@ -402,6 +426,20 @@ function Exchange.New(options)
         end
         return ticket
     end
+    -- Retained notifications: whole snapshots, separate from writable configuration.
+    function bus.GetState(topic,id)
+        name(topic);key(id)
+        return copy(states[topic] and states[topic][id])
+    end
+    function bus.PublishState(topic,id,value,source)
+        name(topic);key(id);value=copy(value)
+        states[topic]=states[topic] or {}
+        if equal(states[topic][id],value) then return false end
+        states[topic][id]=value
+        if next(states[topic])==nil then states[topic]=nil end
+        bus.Publish(topic,{key=id,value=value,removed=value==nil},source)
+        return true
+    end
     -- Call periodically if abandoned tickets should release the bus's references.
     function bus.Sweep()
         local expired = 0
@@ -415,5 +453,11 @@ end
 
 local shared = Exchange.New()
 shared.New = Exchange.New
+local runtimePath='/mods/FireDragonModLoader/lua/FireDragon/ExchangeRuntime.lua'
+function shared._StartSim() return import(runtimePath).Export.StartSim(shared) end
+function shared._StartUI() return import(runtimePath).Export.StartUI(shared) end
+function shared._ReceiveCommand(data) return import(runtimePath).Export.ReceiveCommand(shared,data) end
+function shared._ReceiveSync(data) return import(runtimePath).Export.ReceiveSync(shared,data) end
+function shared._FlushTransport() return import(runtimePath).Export.Flush(shared) end
 Export = shared
 return shared

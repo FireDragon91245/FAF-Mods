@@ -1,4 +1,4 @@
-# FireDragon Information Exchange (v9)
+# FireDragon Information Exchange (v12)
 
 ```lua
 local Exchange = import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export
@@ -9,6 +9,131 @@ No native DLL is required. `Exchange.New({clock = function, onError = function})
 creates an isolated bus for inner-mod use; both options are optional. Bus functions
 use dot syntax; returned handles use colon syntax, except message `Reply` and
 `IsOpen`, `TryClaim` and `ReleaseClaim`, which are closures using dot syntax.
+
+## UI and Sim transport
+
+The same exchange covers all three routes:
+
+| Route | API |
+| --- | --- |
+| UI to UI, within one client | Normal local API, or `Exchange.UI` in UI |
+| Sim to Sim, between simulation mods/services | Normal local API, or `Exchange.Sim` in Sim |
+| UI to Sim | `Exchange.Sim.Publish/Request`; edits to mirrored Sim configuration |
+| Sim to UI | `Exchange.UI.Publish/PublishState`; configuration mirrors and request replies |
+
+Local configuration, notifications and dialogs never cross runtimes unless
+explicitly declared/routed. UI style settings can use a UI-local publication;
+server-side services can exchange ordinary local Sim notifications or requests.
+
+The shared loader owns the engine hooks, serialization, command delivery,
+configuration mirrors, reply correlation, timeout cleanup and sync. Mods do not
+implement their own SimCallback or UserSync handlers for this API. Local calls
+remain local; UI-to-Sim messages explicitly use `Exchange.Sim`.
+
+Publish configuration **once in Sim** with a Sim declaration:
+
+```lua
+-- Sim: callback and validator remain in Sim and are never serialized.
+local settings = Exchange.PublishConfig('MyMod.settings', {enabled=false},
+    'ReadWrite', function(values, old, change)
+        ApplySettings(values)
+        -- change.source is {realm='UI', army=..., player=...} for remote writes.
+    end, function(values)
+        return type(values)=='table' and type(values.enabled)=='boolean'
+    end, {scope='Sim', authorize='Cheats'})
+
+-- UI: automatically discovers the published value. No second publication.
+if Exchange.HasConfig('MyMod.settings') then
+    local ticket = Exchange.SetPath('MyMod.settings', {'enabled'}, true)
+    -- Save the ticket and inspect Status()/Poll() on a subsequent UI update.
+end
+```
+
+Sim-scoped keys automatically appear in each UI exchange with their access mode.
+`Get` reads the latest confirmed value; `Set`, `SetPath`, and indexed assignments
+through `View` submit a command. They do not optimistically change the UI mirror.
+The Sim publisher validates and applies accepted writes, then the loader mirrors
+authoritative values to every UI. Set methods return a remote ticket; proxy
+assignments can instead be tracked with `Exchange.ConfigStatus(key)` returning
+`{status='idle'|'pending'|'complete'|'failed'|'timeout'|'cancelled', error=..., denied=...}`.
+It describes the most recent write submitted by that UI. ReadOnly writes fail
+locally. Publisher owner handles still write directly in Sim. Closing a publication
+removes its UI mirror and invalidates old views; stale snapshots are ignored.
+Do not publish a UI-local key with the same name as a Sim-scoped key.
+
+The declaration's `scope` defaults to `Local`. Sim scope publishes readable state
+to all UIs. Authorization controls UI mutation:
+
+- `authorize='Army'`: a valid command-source army is required.
+- `authorize='Cheats'`: also requires the simulation's CheatsEnabled result.
+- `authorize=function(source, operation, payload) ... end`: must return true.
+  Source includes trusted `realm`, `army`, `player`, `actor`, and `cheats` fields.
+- Omitted authorization denies remote mutation. Local Sim writes remain allowed.
+
+The loader obtains source identity from the engine. Payload fields cannot replace
+it. The Sim validator receives the entire proposed value, even for a single
+nested write; rejected values never commit or invoke the change callback.
+
+For UI-to-Sim notifications and requests, Sim exposes the topic and registers
+ordinary handlers. Authorization uses the same policies:
+
+```lua
+-- Sim:
+Exchange.ConfigureTopic('MyMod.work', {delivery='Consume', capacity=32})
+Exchange.Expose('MyMod.work', {notifications=true, authorize='Army'})
+local work = Exchange.Listen('MyMod.work')
+
+Exchange.Expose('MyMod.assistance', {requests=true, authorize='Army'})
+local responder = Exchange.Respond('MyMod.assistance', function(payload, reply, context)
+    if not context.TryClaim() then return end
+    return Help(context.source.army, payload)
+end)
+
+-- UI:
+local receipt = Exchange.Sim.Publish('MyMod.work', {entityID=123, amount=3})
+local dialog = Exchange.Sim.Request('MyMod.assistance', {entityID=123}, {
+    replyMode='First', timeout=5,
+})
+-- dialog:Poll() receives Sim replies on later UI updates.
+```
+
+One Expose declaration may enable both `notifications=true` and `requests=true`.
+Its returned handle's `Close()` disables future remote operations; existing
+dialogs retain their captured responders. Unexposed topics reject UI commands.
+Broadcast/Consume queues, peek/take decisions, First/All replies, claims and
+resource/state changes run in Sim using the ordinary APIs below. Each notification
+envelope and handler context includes `source` for remote traffic. Requests can
+be handled immediately or deferred/polled in Sim without blocking UI. Reply
+closures stay in Sim; the loader forwards their plain result data to the UI ticket.
+
+`Exchange.Sim.Publish` returns a receipt ticket: its successful Poll envelope
+contains `value={delivered=...,errors=...}`. It confirms dispatch/enqueue, not
+completion of work by polling consumers. Config write receipts contain
+`value=true`. `Exchange.Sim.Request` returns reply envelopes using the local
+dialog pattern. Remote tickets additionally support terminal `failed` status
+and `Error`; for example `denied`, `invalid_value`, or `invalid_request`.
+Pending responder counts arrive from Sim; before its first update Pending returns
+1 to indicate an outstanding command. Cancellation is sent to Sim and invalidates
+its responders when delivered. Timeout/cancellation do not undo completed work.
+
+Sim may also send UI notifications with `Exchange.UI.Publish(topic, payload)`;
+ordinary UI Subscribe/Listen handlers receive them. These target every UI, with
+delivery/consumption independent in each UI runtime. They must not drive Sim
+gameplay. Cross-runtime request responders live in Sim; UI responders handle
+UI-local requests only. The local API is unchanged.
+
+Wire data must be plain finite data, at most 64 KiB, 4096 nodes and 16 levels per
+encoded value/record (including envelope nesting). Use entity IDs, not live
+entities/functions. A remote dialog's `responseCapacity` defaults to 256, max
+1024; exceeding it cancels the dialog with `response_overflow`. Each UI and the
+Sim transport allow 256 active operations, at most 64 commands per player per
+sync beat, and a bounded 512-record outgoing batch. Overloaded commands may time
+out; pending response forwarding applies backpressure. UI session ownership is
+bound to the engine's player identity, and duplicate command IDs are rejected.
+Configuration changes and replies flush on FAF's sync beat, including while the
+simulation is paused. Full snapshots
+also refresh every 50 ticks for recreated UIs/observers; startup requests a full
+snapshot immediately. Callbacks must remain prompt and non-yielding.
 
 ## Configuration
 
@@ -37,7 +162,11 @@ settings:View().display.scale = 4
 settings:Close()
 ```
 
-`PublishConfig(key, value, mode, callback)` rejects duplicate keys. Mode defaults
+`PublishConfig(key, value, mode, callback, validate)` rejects duplicate keys. The
+optional `validate(snapshot)` runs on the initial value and every proposed whole
+or nested write, before committing. Throw or return false to reject it without
+changing the publication or notifying the publisher. It receives a detached
+snapshot and must not mutate the publication. Mode defaults
 to `ReadOnly`. `ReadWrite` requires a publisher callback; ReadOnly may also have
 one. `HasConfig(key)` distinguishes a missing publication from a published nil.
 `Get` returns a detached snapshot. `Set(key, value)` replaces the whole value;
@@ -303,9 +432,53 @@ them in the receiving mod rather than passing live entities. Normal FAF float
 number precision applies. Errors in consumer callbacks are isolated and reported
 through `WARN` by default or the bus's `onError(message)` function.
 
-The shared exchange lives only in the current Lua runtime. UI and Sim, players,
-recreated runtimes and separate private buses do not share messages/state. Nothing
-is persisted, synchronized over the network or automatically bridged across
-UI/Sim. Keep synchronized gameplay producers/handlers and their registration
-order deterministic on every simulation peer. Use existing FAF synchronization
-mechanisms when crossing those boundaries. No game scheduler/thread is installed.
+Local exchange state lives in the current Lua runtime; private New buses have no
+transport. The shared singleton bridges only Sim-scoped configuration and explicit
+remote operations described above. Data is not persisted to profiles or savefiles
+by this library. Keep Sim producers/handlers and registration order deterministic
+on every peer. UI-to-Sim commands use FAF's synchronized command path, and the
+loader owns one SimSync reset hook and one UI beat callback for transport lifecycle.
+Mirrors/results travel through FAF Sync and are visible to clients; this is not
+a channel for private player information.
+
+## Retained event snapshots
+
+Status and telemetry belong to the notification bus, independently of editable
+configuration. A retained event stores the latest **whole** snapshot for a key:
+
+```lua
+-- Sim: status for this unit, visible to its owner and observer focus.
+Exchange.UI.PublishState('MyMod.UnitStatus', unit.EntityId, {
+    Queue = jobs, Progress = progress,
+}, {army=unit.Army})
+
+-- UI: read the latest snapshot at any time, including after opening a panel.
+local status = Exchange.GetState('MyMod.UnitStatus', selectedEntityID)
+local subscription = Exchange.Subscribe('MyMod.UnitStatus', function(message, context)
+    -- message = {key=..., value=..., removed=...}
+    -- context.source.realm == 'Sim' for transported updates
+end)
+
+-- Sim: entity destroyed/removed. This clears the UI cache and emits a removal.
+Exchange.UI.PublishState('MyMod.UnitStatus', unit.EntityId, nil, {army=unit.Army})
+```
+
+`PublishState(topic, key, value)` and `GetState(topic, key)` also work locally in
+UI or Sim. Reads copy data; nil removes a snapshot. Local publishing notifies
+ordinary subscribers/inboxes only when the value changes. Retention is separate
+from notification consumption: reading GetState does not consume a message.
+
+Cross-runtime PublishState coalesces updates to the same topic/key within a sync
+beat. UI caches are replaced whole, so removed jobs, fields and array tails never
+survive a recursive merge. Subscriptions created later can call GetState for the
+current snapshot; ordinary nonretained notifications still have no history.
+Replayed/stale sync packets do not repeat notifications. Full refreshes do not
+emit unchanged snapshots.
+
+The optional `army` filters outgoing presentation data to that focus army and
+observer focus (`-1`). Omit it for public state. Focus changes restore the new
+army's retained data and remove old cached data; ownership changes revoke the old
+copy immediately. Filtering affects only the outgoing Sync packet, never gameplay
+state or message handling. Consumers must release their subscription handles;
+producers must publish nil when an entity stops existing. The loader handles
+resnapshots after UI startup/focus changes and normal periodic refreshes.

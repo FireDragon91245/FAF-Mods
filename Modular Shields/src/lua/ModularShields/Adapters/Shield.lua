@@ -29,6 +29,18 @@ local function Apply(host, stats)
     -- FAF retains its normal adjacency multiplier on this override.
     host:SetEnergyMaintenanceConsumptionOverride(stats.Upkeep)
     host:UpdateConsumptionValues()
+    local ignore=stats.IgnoreResources==true
+    if (host.ModuleIgnoreResources==true)~=ignore and s and not IsDestroyed(s) then
+        host.ModuleIgnoreResources=ignore
+        if ignore then
+            s.NoEnergyToSustain=false;s.DepletedByEnergy=false
+            if s.Enabled and not s.DepletedByDamage and s:GetHealth()>0 then
+                s.Recharged=true;s:OnEnergyViable()
+            end
+        elseif host:GetAIBrain().EnergyDepleted or host:GetAIBrain():GetEconomyStored('ENERGY')<=0 then
+            s:OnEnergyDepleted()
+        end
+    end
 end
 local function TickRegen(host)
     local s=host.MyShield

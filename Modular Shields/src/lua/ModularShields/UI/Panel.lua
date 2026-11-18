@@ -2,20 +2,24 @@ local UI=import('/mods/FireDragonModLoader/lua/FireDragon/UI.lua').Export
 local function Group(parent,name) return UI.Panel(parent,{name=name}) end
 local function Bitmap(parent) return UI.Icon(parent,{color='00000000'}) end
 local Model=import('/mods/ModularShields/lua/ModularShields/UI/Model.lua').Export
+local Exchange=import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export
+local Messages=import('/mods/ModularShields/lua/ModularShields/Messages.lua').Export
 local C=Model.Colors
 local view
 local Update
-local requestSerial=0
-local function Send(action,value) SimCallback({Func='ModularShieldAction',Args={Action=action,Value=value}},true) end
+local function Submit(v,action,value,cancelRequestId)
+    local ticket=Exchange.Sim.Request(Messages.Action,{EntityId=v.EntityId,Action=action,Value=value,CancelRequestId=cancelRequestId},{replyMode='First'})
+    table.insert(v.Actions,ticket);return ticket
+end
+local function Send(action,value) if view then return Submit(view,action,value) end end
 local function QueueRequest(v,action,row,job)
-    requestSerial=requestSerial+1
     local now=GetSystemTimeSeconds()
-    local token=tostring(GetFocusArmy())..':'..tostring(now)..':'..tostring(requestSerial)
     local jobId=job and job.JobId or nil
     local cancelRequestId=job and not jobId and job.RequestId or nil
-    table.insert(v.Pending,{Action=action,ModuleId=row.Id,RequestId=token,JobId=jobId,CancelRequestId=cancelRequestId,Expires=now+5})
+    local value=row.Id;if action=='cancel' then value=jobId end
+    local ticket=Submit(v,action,value,cancelRequestId)
+    table.insert(v.Pending,{Action=action,ModuleId=row.Id,RequestId=ticket.Key,Ticket=ticket,JobId=jobId,CancelRequestId=cancelRequestId,Expires=now+5})
     Update() -- render before the sim has processed installs or cancels
-    SimCallback({Func='ModularShieldAction',Args={Action=action,Value=action=='cancel' and jobId or row.Id,CancelRequestId=cancelRequestId,RequestId=token}},true)
 end
 local function Text(control,value,color)
     if control.Value~=value then control:SetText(value);control.Value=value end
@@ -67,7 +71,7 @@ local function Create(state,id)
         prefKey='FireDragon_ModularShields_Window',x=(frame.Width()-780)/2,y=math.max(8,frame.Height()-650),width=780,height=450,minWidth=420,minHeight=260})
     local scroll=UI.Scroll(window.Client,{contentWidth=760,contentHeight=403});UI.Fill(scroll,window.Client,6)
     local p=scroll.Content
-    local v={Panel=p,Window=window,Scroll=scroll,EntityId=id,State=state,Cards={},Pending={}}
+    local v={Panel=p,Window=window,Scroll=scroll,EntityId=id,State=state,Cards={},Pending={},Actions={}}
     scroll.OnScroll=function()
         if v.Hovered and v.Hovered.Hover then v.Hovered.Hover:Hide();v.Hovered.Hovered=false end
         v.Hovered=nil;HideTip(v)
@@ -167,8 +171,7 @@ Update=function()
     local selection=GetSelectedUnits() or {}
     local unit=table.getn(selection)==1 and selection[1]
     local id=unit and unit:GetEntityId()
-    local data=id and UnitData[id]
-    local state=data and data.ModularShield
+    local state=id and Exchange.GetState(Messages.Status,id)
     if not state then
         if view then view.Tip:Destroy();view.Window:Destroy();view=nil end
         return
@@ -178,9 +181,20 @@ Update=function()
         view=Create(state,id)
     end
     local v=view
+    local active={}
+    for _,ticket in ipairs(v.Actions) do
+        local response=ticket:Poll()
+        if response then
+            v.RequestError=response.error or (response.value and not response.value.Accepted and response.value.Reason) or nil
+        end
+        if ticket:Status()=='pending' then table.insert(active,ticket)
+        elseif ticket.Error then v.RequestError=ticket.Error end
+    end
+    v.Actions=active
     state,v.Pending=Model.Project(state,v.Pending,GetSystemTimeSeconds())
     v.State=state
-    local live=data.ModularShieldLive or {HP=state.Stats.ShieldMaxHP,MaxHP=state.Stats.ShieldMaxHP,Regen=0,Damage=0,Status=''}
+    local live=Exchange.GetState(Messages.Live,id) or {HP=state.Stats.ShieldMaxHP,MaxHP=state.Stats.ShieldMaxHP,Regen=0,Damage=0,Status=''}
+    if v.RequestError then state.LastReason=v.RequestError end
     Text(v.Title,(state.Faction or 'UEF')..'  /  MODULAR SHIELD',C.Text)
     Text(v.HP,string.format('HP  %.0f / %.0f',live.HP,live.MaxHP),C.HP)
     Text(v.Regen,string.format('+%.0f HP/s  %s',live.Regen,live.Status),C.Regen)

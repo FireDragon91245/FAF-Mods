@@ -20,8 +20,10 @@ if ($LASTEXITCODE) { throw 'Loader mod metadata syntax failed' }
 
 Push-Location -LiteralPath $PSScriptRoot
 try {
-    & (Join-Path $PSScriptRoot 'dist\lua-script-test.exe') tests/information_exchange.lua
-    if ($LASTEXITCODE) { throw 'FAF Lua information exchange contract tests failed' }
+    foreach ($test in 'information_exchange','exchange_transport','exchange_runtime','exchange_routes') {
+        & (Join-Path $PSScriptRoot 'dist\lua-script-test.exe') "tests/$test.lua"
+        if ($LASTEXITCODE) { throw "FAF Lua exchange tests failed: $test" }
+    }
     & lua tests/storage.lua
     if ($LASTEXITCODE) { throw 'Shared storage contract tests failed' }
     & lua tests/ui.lua

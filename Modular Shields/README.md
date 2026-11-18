@@ -1,6 +1,51 @@
 Upgrade and cancellation clicks update immediately and reconcile with the simulation, including dependent queue cancellation and cancelling requests that have not yet received a job ID. The window remembers its geometry per FAF profile, with horizontal and vertical scrolling when resized.
 
-Requires **FireDragon Mod Loader v6** installed and enabled as a normal FAF mod (shared core dependency).
+Requires **FireDragon Mod Loader v13** installed and enabled as a normal FAF mod (shared core dependency).
+
+Version 27 publishes match-wide ReadWrite debug settings once in Sim under
+`ModularShields.Debug`, with control metadata under `ModularShields.DebugSchema`.
+FireDragon Debug Tools v9 displays them in its optional Modular Shields tab.
+The publication declares `{scope='Sim', authorize='Cheats'}` and a validator.
+The shared loader owns UI commands, authorization, authoritative mirrors and sync;
+Modular Shields has no UI publication or custom configuration sync handlers.
+Its publisher callback updates existing generators in entity order. Simulation
+mods can also edit the exchange directly. Defaults are false for both switches,
+1 for HP, and 0 for additions.
+
+- `InstantUpgrade`: module installs/removals complete without their normal timer.
+  Installs still require payment unless IgnoreResources is enabled.
+- `IgnoreResources`: module installs require no mass/energy, shield upkeep is zero,
+  repair aura needs no mass, and energy depletion does not switch the shield off.
+  Damage depletion and manually disabling the shield retain their normal behavior.
+- `HPMultiplier`: integer 1–10 multiplying chassis base shield HP. Existing absolute
+  shield HP is preserved, so raising the maximum does not instantly heal it.
+- `AdditionalRegen`: integer 0–10000 HP/s, added to the module regeneration path
+  which continues after damage, independently of the native regen delay.
+- `AdditionalSlots`: integer 0–50, added before equipment activation checks.
+- `AdditionalRepair`: integer 0–1000 HP/s, added to an active repair module's aura.
+  It does not grant the aura without a repair upgrade.
+
+Changes recalculate existing shields and new ones use the current settings.
+Resource/timing changes restart module work while retaining completed work and
+actual amounts paid. These settings are debug state for this match, not saved
+profile preferences or blueprint edits.
+
+All mod-specific UI/Sim communication uses Information Exchange. The static
+`Messages.lua` contract defines `ModularShields.Action` requests (install, remove,
+cancel, pause and repair toggle), plus retained `ModularShields.Status` and
+`ModularShields.Live` event snapshots. Actions carry a target entity ID and are
+authorized with FAF's native SecureUnits check. Exchange tickets provide acceptance
+and rejection receipts; their keys also identify installs cancelled before a job
+ID reaches UI. The panel's pending list only projects unconfirmed UI intent.
+
+Entity IDs accept both numbers and FAF UI's decimal strings. The original ID is
+preserved for native lookups; malformed IDs still fail validation, and native
+unit-control checks remain authoritative.
+
+Generator status, queue/progress, telemetry and repair consumption no longer use
+custom unit sync fields. Whole retained snapshots avoid stale queue tails, filter
+by army, and feed both the upgrade panel and native unit-view adjustments.
+The mod has no custom SimCallbacks/UserSync transport hooks.
 
 # Modular Shields
 

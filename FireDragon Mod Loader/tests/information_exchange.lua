@@ -146,6 +146,14 @@ assert(bus.Sweep() == 1 and ticket:Status() == 'timeout')
 assert(not deferred:Poll().IsOpen())
 deferred:Close()
 local private = shared.New()
+local validated=private.PublishConfig('validated',1,'ReadWrite',function() end,function(value)
+    return type(value)=='number' and value>=1 and value<=10
+end)
+rejects(function() private.Set('validated',11) end)
+assert(private.Get('validated')==1)
+rejects(function() private.PublishConfig('invalidInitial',0,'ReadOnly',nil,function() return false end) end)
+assert(not private.HasConfig('invalidInitial'))
+validated:Set(10);assert(private.Get('validated')==10)
 assert(not private.HasConfig('nil') and private.Publish('order', {}) == 0)
 
 -- A single broadcast reaches all four readers; peeking never mutates queued data.

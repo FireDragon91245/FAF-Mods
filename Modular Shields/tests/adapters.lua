@@ -179,12 +179,65 @@ function brain:TakeResource(_,requested) local paid=math.min(mass,requested);mas
 host={Sync={},Army=1,EntityId=1,MyShield={IsUp=function() return true end,GetPosition=function() return {0,0,0} end},ModuleStats={ShieldSize=40,RepairBudget=30},GetAIBrain=function() return brain end}
 repair.Tick(host,R)
 check(math.abs(target.HP-(50+1/.75))<1e-7 and mass==0,'Repair only delivers HP paid with actual mass')
-check(host.Sync.ModularShieldRepairMass==1,'Native display attribution reports exact paid mass with no second withdrawal')
+check(host.ModuleRepairMass==1,'Native display attribution reports exact paid mass with no second withdrawal')
 local hp=target.HP;repair.Tick(host,R)
 check(target.HP==hp,'Empty mass storage gives no free healing')
-check(host.Sync.ModularShieldRepairMass==0,'Resource starvation clears native repair attribution')
+check(host.ModuleRepairMass==0,'Resource starvation clears native repair attribution')
 target.Army=2;mass=100;repair.Tick(host,R)
 check(target.HP==hp and mass==100,'Different army receives no repair or charge')
-host.Sync.ModularShieldRepairMass=20;host.RepairPaused=true;repair.Tick(host,R)
-check(host.Sync.ModularShieldRepairMass==0,'Pausing repair clears native consumption attribution')
+host.ModuleRepairMass=20;host.RepairPaused=true;repair.Tick(host,R)
+check(host.ModuleRepairMass==0,'Pausing repair clears native consumption attribution')
+-- Resource-free installation still takes normal time unless InstantUpgrade is set.
+R.Config.Debug.IgnoreResources=true
+host=newHost();job=assert(R.Core.RequestInstall(host.Loadout,'power_1',R.Registry,R.Config))
+local previousEvent=pending
+Jobs.Start(host,R);co=host.ModuleThread
+assert(coroutine.resume(co));assert(coroutine.resume(co))
+check(job.PaidWork>0 and job.PaidWork<job.Quote.Work and pending==previousEvent,'ignored resources advance timed work without economy events')
+Jobs.Stop(host)
+R.Config.Debug.InstantUpgrade=true
+Jobs.Start(host,R);co=host.ModuleThread;assert(coroutine.resume(co))
+check(host.Loadout.Installed.power_1 and job.MassSpent==0 and job.EnergySpent==0,'instant plus ignored resources completes free once')
+R.Config.Debug.IgnoreResources=false
+host=newHost();job=assert(R.Core.RequestInstall(host.Loadout,'power_1',R.Registry,R.Config))
+Jobs.Start(host,R);co=host.ModuleThread;assert(coroutine.resume(co))
+check(pending.Time==.1 and pending.Mass==job.Quote.Mass and not host.Loadout.Installed.power_1,'instant alone retains full payment requirement')
+pending.Callback(host,1);assert(coroutine.resume(co))
+check(host.Loadout.Installed.power_1 and job.MassSpent==job.Quote.Mass,'paid instant completion retains actual cost')
+R.Config.Debug.InstantUpgrade=false
+
+-- Work done for free must not turn into a bill after toggling costs back on.
+R.Config.Debug.IgnoreResources=true
+host=newHost();job=assert(R.Core.RequestInstall(host.Loadout,'power_1',R.Registry,R.Config))
+Jobs.Start(host,R);co=host.ModuleThread
+assert(coroutine.resume(co));assert(coroutine.resume(co));Jobs.Stop(host)
+local freeWork=job.PaidWork
+R.Config.Debug.IgnoreResources=false
+Jobs.Start(host,R);co=host.ModuleThread;assert(coroutine.resume(co))
+local actualMass=0
+while coroutine.status(co)~='dead' do
+    actualMass=actualMass+pending.Mass;pending.Callback(host,1);assert(coroutine.resume(co))
+end
+check(math.abs(job.MassSpent-actualMass)<.000001 and math.abs(actualMass-job.Quote.Mass*(1-freeWork/job.Quote.Work))<.000001,
+    'resuming paid work charges only work not already completed for free')
+
+-- Free repair at zero mass does not debit or report consumption.
+target.Army=1;target.HP=50;mass=0
+host={Sync={},Army=1,MyShield={IsUp=function() return true end,GetPosition=function() return {0,0,0} end},
+    ModuleStats={ShieldSize=40,RepairBudget=30},GetAIBrain=function() return brain end}
+R.Config.Debug.IgnoreResources=true;repair.Tick(host,R)
+check(target.HP==80 and mass==0 and host.ModuleRepairMass==0,'ignore resources heals without mass or phantom consumption')
+R.Config.Debug.IgnoreResources=false
+-- Turning resource bypass on revives an energy-starved dome, and off restores draining.
+shield.Enabled=true;shield.DepletedByDamage=false;shield.NoEnergyToSustain=true;shield.DepletedByEnergy=true
+shield.HP=100
+local viable,depleted=0,0
+function shield:OnEnergyViable() viable=viable+1 end
+function shield:OnEnergyDepleted() depleted=depleted+1 end
+local powerHost={MyShield=shield,ClearFocusEntity=function() end,SetEnergyMaintenanceConsumptionOverride=function() end,
+    UpdateConsumptionValues=function() end,GetAIBrain=function() return {EnergyDepleted=true} end}
+adapter.Apply(powerHost,{ShieldMaxHP=200,ShieldSize=40,ShieldRegen=20,Upkeep=0,IgnoreResources=true})
+check(viable==1 and not shield.NoEnergyToSustain and not shield.DepletedByEnergy,'enabling ignored resources clears existing energy starvation')
+adapter.Apply(powerHost,{ShieldMaxHP=200,ShieldSize=40,ShieldRegen=20,Upkeep=100,IgnoreResources=false})
+check(depleted==1,'disabling ignored resources restores native energy depletion')
 print('PASS: '..count..' adapter contract checks')

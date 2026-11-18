@@ -47,22 +47,30 @@ local function Start(host,R)
                 while job.PaidWork<job.Quote.Work and not host.Dead do
                     WaitForCapacity(host,R,job)
                     local rate=Assist.Rate(host,R.Config)
-                    if job.Kind=='Remove' then
+                    local debug=R.Config.Debug or {}
+                    if debug.InstantUpgrade and (job.Kind=='Remove' or debug.IgnoreResources) then
+                        job.PaidWork=job.Quote.Work
+                    elseif debug.IgnoreResources and job.Kind~='Remove' then
+                        WaitTicks(1)
+                        job.PaidWork=math.min(job.Quote.Work,job.PaidWork+rate/10)
+                        PublishProgress(host,false)
+                    elseif job.Kind=='Remove' then
                         WaitTicks(1)
                         job.PaidWork=math.min(job.Quote.Work,job.PaidWork+rate/10)
                         PublishProgress(host,false)
                     else
                     local before=job.PaidWork
-                    local work=math.min(rate*R.Config.InstallSliceSeconds,job.Quote.Work-before)
+                    local work=debug.InstantUpgrade and (job.Quote.Work-before) or math.min(rate*R.Config.InstallSliceSeconds,job.Quote.Work-before)
                     local fraction=work/job.Quote.Work
                     local fulfilled=0
+                    local beforeMass,beforeEnergy=job.MassSpent,job.EnergySpent
                     host.ModuleEvent=CreateEconomyEvent(host,job.Quote.Energy*fraction,job.Quote.Mass*fraction,
-                        math.max(.1,work/rate),function(_,progress)
+                        debug.InstantUpgrade and .1 or math.max(.1,work/rate),function(_,progress)
                             if (host.ModuleEpoch or 0)~=epoch then return end
                             fulfilled=math.max(fulfilled,math.min(1,math.max(0,progress)))
                             job.PaidWork=math.min(job.Quote.Work,before+work*fulfilled)
-                            job.MassSpent=job.Quote.Mass*job.PaidWork/job.Quote.Work
-                            job.EnergySpent=job.Quote.Energy*job.PaidWork/job.Quote.Work
+                            job.MassSpent=beforeMass+job.Quote.Mass*fraction*fulfilled
+                            job.EnergySpent=beforeEnergy+job.Quote.Energy*fraction*fulfilled
                             PublishProgress(host,false)
                         end)
                     repeat

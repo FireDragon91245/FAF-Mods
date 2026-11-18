@@ -9,6 +9,14 @@ UI.Theme = { Background='f20a141f', Border='ff344958', Surface='ff24394b', Text=
 local function count(t) return table.getn(t) end
 local function value(v) if type(v)=='function' then return v() end; return v end
 local function clamp(v,a,b) return math.max(a,math.min(b,v)) end
+local function pending(control)
+    local ticket=control.PendingTicket
+    if ticket and ticket:Status()=='pending' then return true end
+    control.PendingTicket=nil;return false
+end
+local function track(control,ticket)
+    if type(ticket)=='table' and type(ticket.Status)=='function' then control.PendingTicket=ticket end
+end
 -- Maui Show() can reveal a child after its ancestor was hidden. Refreshes must
 -- respect the owning hierarchy instead of deciding visibility from geometry alone.
 local function visible(c)
@@ -151,10 +159,11 @@ function UI.Button(parent,o)
     c.Label=UI.Label(c,{x=6,y=function() return math.max(0,(c.Height()-18)/2) end,width=function() return math.max(0,c.Width()-12) end,height=18,text=o.text})
     c.OnClick=o.onClick
     function c:UpdateState()
-        local state=not self.FDEnabled and 'disabled' or (self.Pressed and 'down' or (self.Hovered and 'over' or 'up'))
+        local state=not self.FDEnabled and 'disabled' or ((self.Pressed or self.Selected) and 'down' or (self.Hovered and 'over' or 'up'))
         self:SetTexture(textures[state] or textures.up)
         self.Label:SetColor(self.FDEnabled and UI.Theme.Text or UI.Theme.Muted)
     end
+    function c:SetSelected(selected) self.Selected=selected==true;self:UpdateState() end
     c.HandleEvent=function(self,e)
         if e.Type=='MouseEnter' then self.Hovered=true;self:UpdateState();return true end
         if e.Type=='MouseExit' then self.Hovered=false;self:UpdateState();return true end
@@ -197,8 +206,9 @@ function UI.Checkbox(parent,o)
         self.Label:SetColor(self.FDEnabled and UI.Theme.Text or UI.Theme.Muted)
     end
     function c:SetCheck(v,silent)
+        if silent and pending(self) then return end
         self.Checked=v==true;self:UpdateState()
-        if not silent and o.onCheck then o.onCheck(self,self.Checked) end
+        if not silent and o.onCheck then track(self,o.onCheck(self,self.Checked)) end
     end
     function c:IsChecked() return self.Checked end
     c.OnHide=function(self,hidden) if hidden then self.Hovered=false;self:UpdateState() end end
@@ -212,6 +222,157 @@ function UI.Checkbox(parent,o)
         return false
     end
     UI.Interactive(c);c:SetCheck(o.checked,true);return c
+end
+-- Native keyboard editing inside the library's clipped, themed layout.
+function UI.TextInput(parent,o)
+    o=o or {};local c=UI.Panel(parent,{x=o.x,y=o.y,width=o.width or 80,height=o.height or 24})
+    -- The same skinnable border used by native text-entry menus.
+    c.FrameParts={}
+    local edge=5
+    local parts={{'topLeft',0,0,edge,edge},{'topRight',function() return c.Width()-edge end,0,edge,edge},
+        {'bottomLeft',0,function() return c.Height()-edge end,edge,edge},
+        {'bottomRight',function() return c.Width()-edge end,function() return c.Height()-edge end,edge,edge},
+        {'top',edge,0,function() return math.max(0,c.Width()-2*edge) end,edge},
+        {'bottom',edge,function() return c.Height()-edge end,function() return math.max(0,c.Width()-2*edge) end,edge},
+        {'left',0,edge,edge,function() return math.max(0,c.Height()-2*edge) end},
+        {'right',function() return c.Width()-edge end,edge,edge,function() return math.max(0,c.Height()-2*edge) end},
+        {'center',edge,edge,function() return math.max(0,c.Width()-2*edge) end,function() return math.max(0,c.Height()-2*edge) end}}
+    for _,part in ipairs(parts) do
+        table.insert(c.FrameParts,UI.Icon(c,{x=part[2],y=part[3],width=part[4],height=part[5],depth=0,
+            texture=skin('/game/chat_brd/'..part[1]..'.dds')}))
+    end
+    local edit=import('/lua/maui/edit.lua').Edit(c)
+    c.Edit=edit;c.FDEnabled=true;c.CommittedText=tostring(o.text or '')
+    UI.At(edit,c,4,2,function() return math.max(0,c.Width()-8) end,function() return math.max(0,c.Height()-4) end)
+    edit.Depth:Set(function() return c.Depth()+3 end)
+    edit:SetFont(UIUtil.bodyFont,o.size or 13);edit:SetForegroundColor(UIUtil.fontColor or UI.Theme.Text)
+    edit:SetBackgroundColor('ff000000');edit:ShowBackground(false);edit:SetMaxChars(o.maxChars or 32)
+    edit:EnableHitTest();edit:SetText(c.CommittedText)
+    function c:SetText(text) self.CommittedText=tostring(text);edit:SetText(self.CommittedText) end
+    function c:GetText() return edit:GetText() end
+    function c:Commit()
+        if not self.FDEnabled then return false end
+        local text=edit:GetText()
+        if o.onCommit and o.onCommit(self,text)==false then edit:SetText(self.CommittedText);return false end
+        self.CommittedText=edit:GetText();return true
+    end
+    function c:SetEnabled(enabled)
+        self.FDEnabled=enabled==true
+        if self.FDEnabled then edit:EnableInput() else edit:DisableInput() end
+    end
+    edit.OnEnterPressed=function() c:Commit() end
+    edit.OnEscPressed=function() edit:SetText(c.CommittedText);return true end
+    edit.HandleEvent=function(_,e)
+        if e.Type=='ButtonPress' and c.FDEnabled then
+            local owner=c
+            while owner do if owner.FDWindow then owner:Focus();break end;owner=owner.FDParent end
+            edit:AcquireFocus()
+        end
+        return false
+    end
+    c:SetNeedsFrameUpdate(true)
+    c.OnFrame=function()
+        local l,t,r,b=clip(c)
+        if visible(c) and l<=c.Left() and t<=c.Top() and r>=c.Right() and b>=c.Bottom() then edit:Show()
+        else edit:Hide() end
+    end
+    c:SetEnabled(true);return c
+end
+function UI.Slider(parent,o)
+    o=o or {};local minimum,maximum,step=o.min or 0,o.max or 100,o.step or 1
+    assert(maximum>minimum and step>0,'Invalid slider range')
+    local c=UI.Panel(parent,{x=o.x,y=o.y,width=o.width or 160,height=o.height or 24})
+    local thumbWidth=32
+    c.Track=UI.Icon(c,{y=function() return (c.Height()-24)/2 end,height=24,width=function() return c.Width() end,
+        texture=skin('/dialogs/options-02/slider-back_bmp.dds')})
+    c.Thumb=UI.Icon(c,{y=function() return (c.Height()-24)/2 end,width=thumbWidth,height=24,
+        texture=skin('/slider02/slider_btn_up.dds')})
+    c.Value=minimum;c.CommittedValue=minimum
+    local function position() return c.Left()+math.max(0,c.Width()-thumbWidth)*(c.Value-minimum)/(maximum-minimum) end
+    c.Thumb.Left:Set(position)
+    function c:UpdateState()
+        local state=self.FDSliderDrag and 'down' or (self.Hovered and 'over' or 'up')
+        self.Thumb:SetTexture(skin('/slider02/slider_btn_'..state..'.dds'))
+        self.Thumb.FDVisual:SetAlpha(self.FDEnabled and 1 or .4)
+    end
+    function c:SetValue(v,silent,preview)
+        if silent and not preview and (pending(self) or self.FDSliderDrag or self.Dirty) then return end
+        assert(type(v)=='number' and v-v==0,'Invalid slider value')
+        v=clamp(v,minimum,maximum);local changed=v~=self.Value;self.Value=v
+        -- Maui caches lazy layout expressions: changing a plain Lua number does
+        -- not dirty Left or its dependents. Rebind to invalidate the thumb.
+        self.Thumb.Left:Set(position)
+        if not self.FDSliderDrag and not self.Dirty then self.CommittedValue=v end
+        if changed and not silent and o.onChange then track(self,o.onChange(self,v)) end
+    end
+    function c:Commit()
+        if not self.Dirty then return end
+        self.Dirty=false;self.Idle=0
+        if self.Value~=self.CommittedValue then
+            self.CommittedValue=self.Value
+            if o.onChange then track(self,o.onChange(self,self.Value)) end
+        end
+    end
+    local function move(x)
+        local fraction=clamp((x-c.Left()-thumbWidth/2)/math.max(1,c.Width()-thumbWidth),0,1)
+        local v=minimum+math.floor(fraction*(maximum-minimum)/step+.5)*step
+        v=clamp(v,minimum,maximum)
+        if v~=c.Value then
+            c.Dirty=true;c.Idle=0;c:SetValue(v,true,true)
+            if o.onPreview then o.onPreview(c,v) end
+        end
+    end
+    c.HandleEvent=function(self,e)
+        if e.Type=='MouseEnter' then self.Hovered=true;self:UpdateState();return true end
+        if e.Type=='MouseExit' then self.Hovered=false;self:UpdateState();return true end
+        if e.Type~='ButtonPress' or (e.Modifiers and e.Modifiers.Right) then return false end
+        if self.FDSliderDrag then self.FDSliderDrag:OnCancel() end
+        local drag=Dragger();self.FDSliderDrag=drag
+        move(e.MouseX);self:UpdateState()
+        drag.OnMove=function(_,x) if self.FDEnabled then move(x) end end
+        drag.OnRelease=function(_,x)
+            if x and self.FDEnabled then move(x) end
+            self:Commit();self.FDSliderDrag=nil;drag:Destroy();self:UpdateState()
+        end
+        drag.OnCancel=function()
+            self.Dirty=false;self.FDSliderDrag=nil;self:SetValue(self.CommittedValue,true,true)
+            if o.onPreview then o.onPreview(self,self.Value) end
+            drag:Destroy();self:UpdateState()
+        end
+        PostDragger(self:GetRootFrame(),e.KeyCode,drag);return true
+    end
+    c.OnHide=function(self,hidden) if hidden and self.FDSliderDrag then self.FDSliderDrag:OnCancel() end end
+    c.OnDestroy=function(self) if self.FDSliderDrag then self.FDSliderDrag:Destroy();self.FDSliderDrag=nil end end
+    c:SetNeedsFrameUpdate(true)
+    c.OnFrame=function(self,dt)
+        if self.Dirty then
+            self.Idle=(self.Idle or 0)+(dt or 0)
+            if self.Idle>=(o.commitDelay or .3) then self:Commit() end
+        end
+    end
+    UI.Interactive(c);c:SetValue(o.value or minimum,true);c:UpdateState();return c
+end
+-- Integer text entry (Enter to apply) plus a stepped slider for the same value.
+function UI.NumberInput(parent,o)
+    o=o or {};local c=UI.Panel(parent,o);local minimum,maximum=o.min or 0,o.max or 100
+    c.Value=minimum;c.SubmittedValue=minimum
+    function c:SetValue(v,silent)
+        if silent and (pending(self) or self.Slider.FDSliderDrag or self.Slider.Dirty) then return true end
+        if type(v)~='number' or v-v~=0 then return false end
+        v=clamp(math.floor(v+.5),minimum,maximum)
+        local changed=v~=self.SubmittedValue;self.Value=v;self.SubmittedValue=v
+        self.Input:SetText(tostring(v));self.Slider:SetValue(v,true)
+        if changed and not silent and o.onChange then track(self,o.onChange(self,v)) end
+        return true
+    end
+    c.Input=UI.TextInput(c,{x=function() return math.max(0,c.Width()-76) end,width=76,height=function() return c.Height() end,
+        onCommit=function(_,text) return c:SetValue(tonumber(text)) end})
+    c.Slider=UI.Slider(c,{width=function() return math.max(10,c.Width()-88) end,height=function() return c.Height() end,
+        min=minimum,max=maximum,step=o.step or 1,commitDelay=o.commitDelay,
+        onPreview=function(_,v) c.Value=v;c.Input:SetText(tostring(v)) end,
+        onChange=function(_,v) c:SetValue(v);return c.PendingTicket end})
+    function c:SetEnabled(enabled) self.Input:SetEnabled(enabled);self.Slider:SetEnabled(enabled) end
+    c:SetValue(o.value or minimum,true);return c
 end
 function UI.FrameSkin(c)
     local root=UI.Panel(c,{depth=0});UI.Fill(root,c)
@@ -355,7 +516,7 @@ function UI.Tabs(parent,o)
         assert(self.Pages[id],'Unknown tab: '..tostring(id));self.Selected=id
         for key,page in pairs(self.Pages) do
             if key==id then page:Show() else page:Hide() end
-            self.Buttons[key]:SetSolidColor(key==id and UI.Theme.Border or UI.Theme.Surface)
+            self.Buttons[key]:SetSelected(key==id)
         end
         if o.onSelect then o.onSelect(id) end
     end
@@ -367,6 +528,18 @@ function UI.Tabs(parent,o)
         self.Buttons[id]=UI.Button(self,{x=index*(o.tabWidth or 136),width=(o.tabWidth or 136)-4,height=26,text=title,onClick=function() self:Select(id) end})
         if not self.Selected then self:Select(id) else page:Hide() end
         return page
+    end
+    function c:Remove(id)
+        if not self.Pages[id] then return false end
+        self.Pages[id]:Destroy();self.Buttons[id]:Destroy()
+        self.Pages[id]=nil;self.Buttons[id]=nil
+        for index,key in ipairs(self.Order) do if key==id then table.remove(self.Order,index);break end end
+        for index,key in ipairs(self.Order) do
+            local offset=(index-1)*(o.tabWidth or 136)
+            self.Buttons[key].Left:Set(function() return self.Left()+offset end)
+        end
+        if self.Selected==id then self.Selected=nil;if self.Order[1] then self:Select(self.Order[1]) end end
+        return true
     end
     return c
 end

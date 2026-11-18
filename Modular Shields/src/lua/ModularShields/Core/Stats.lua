@@ -1,8 +1,11 @@
 local function Calculate(s, registry, config, neighbors)
-    local b = s.Base
+    local debug=config.Debug or {}
+    local b = {}
+    for key,value in pairs(s.Base) do b[key]=value end
+    b.ShieldMaxHP=b.ShieldMaxHP*(debug.HPMultiplier or 1)
     local out = { ShieldMaxHP = b.ShieldMaxHP, ShieldSize = b.ShieldSize, ShieldRegen = b.ShieldRegen,
         RepairBudget = 0, EnergyMultiplier=1, RepairMassMultiplier=1,
-        ModuleSlots=s.Chassis and config.Chassis[s.Chassis].Slots or 0,
+        ModuleSlots=(s.Chassis and config.Chassis[s.Chassis].Slots or 0)+(debug.AdditionalSlots or 0),
         BaseUpkeep = b.Upkeep, ModuleUpkeep = 0, Capabilities = {}, Dormant = {} }
     local function effect(e)
         local value=e.Value*(e.ChassisScale and e.ChassisScale[s.Chassis] or 1)
@@ -10,7 +13,9 @@ local function Calculate(s, registry, config, neighbors)
     end
     local function clamp()
         for stat,cap in pairs(config.Caps) do
-            out[stat]=math.max((config.Floors or {})[stat] or 0,math.min(out[stat],b[stat] and b[stat]*cap or cap))
+            local limit=b[stat] and b[stat]*cap or cap
+            if stat=='ModuleSlots' then limit=limit+(debug.AdditionalSlots or 0) end
+            out[stat]=math.max((config.Floors or {})[stat] or 0,math.min(out[stat],limit))
         end
     end
     -- Storage capacity is known before selecting active equipment. Extra paid
@@ -40,10 +45,15 @@ local function Calculate(s, registry, config, neighbors)
     local moduleHP,moduleRegen=out.ShieldMaxHP-b.ShieldMaxHP,out.ShieldRegen-b.ShieldRegen
     for _,e in ipairs(neighbors or {}) do if e.Stat~='ModuleSlots' then effect(e) end end
     clamp()
+    out.ShieldRegen=out.ShieldRegen+(debug.AdditionalRegen or 0)
+    moduleRegen=moduleRegen+(debug.AdditionalRegen or 0)
+    if out.Capabilities.repair then out.RepairBudget=out.RepairBudget+(debug.AdditionalRepair or 0) end
     out.BaseHP=b.ShieldMaxHP;out.ModuleHP=moduleHP;out.NeighborHP=out.ShieldMaxHP-b.ShieldMaxHP-moduleHP
     out.BaseRegen=b.ShieldRegen;out.ModuleRegen=moduleRegen;out.NeighborRegen=out.ShieldRegen-b.ShieldRegen-moduleRegen
     out.PreNeighborUpkeep=out.BaseUpkeep+out.ModuleUpkeep
     out.Upkeep = out.PreNeighborUpkeep*out.EnergyMultiplier
+    out.IgnoreResources=debug.IgnoreResources==true
+    if out.IgnoreResources then out.Upkeep=0 end
     return out
 end
 Export = { Calculate = Calculate }

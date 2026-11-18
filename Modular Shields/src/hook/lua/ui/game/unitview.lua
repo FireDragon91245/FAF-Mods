@@ -1,17 +1,19 @@
 local ModularUpdateWindow=UpdateWindow
+local Exchange=import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export
+local Messages=import('/mods/ModularShields/lua/ModularShields/Messages.lua').Export
 function UpdateWindow(info)
-    local data=info.entityId and UnitData[info.entityId]
-    if data and data.ModularShield then
+    local state=info.entityId and Exchange.GetState(Messages.Status,info.entityId)
+    local live=info.entityId and Exchange.GetState(Messages.Live,info.entityId)
+    if state then
         -- The native rollover info can be reused. Copy before attributing aura
         -- spending so successive frames never accumulate the same consumption.
         local copy={};for key,value in pairs(info) do copy[key]=value end
-        local mass=data.ModularShieldRepairMass or 0
+        local mass=live and live.RepairMass or 0
         copy.massConsumed=(info.massConsumed or 0)+mass
         copy.massRequested=(info.massRequested or 0)+mass
         info=copy
     end
     ModularUpdateWindow(info)
-    local live=data and data.ModularShieldLive
     -- Vanilla reads the immutable blueprint here, which omits module and storage
     -- capacity. Preserve its detailed-view visibility and use the live snapshot.
     if live and controls.shieldText and not controls.shieldText:IsHidden() then

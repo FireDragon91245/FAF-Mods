@@ -39,8 +39,24 @@ Clipping changes rendered primitive bounds and bitmap UVs, preserving the logica
 - `Panel`: hierarchy/group, optional `color` and `clip`.
 - `Label`: `text`, `size`, `font`, ARGB `color`; `SetText` / `SetColor`.
 - `Icon` / `Rect`: `texture` or solid ARGB `color`; `SetTexture` / `SetSolidColor`.
-- `Button`: `text`, `onClick(self,event)`. `Label` is available for customization.
+- `Button`: `text`, `onClick(self,event)`, `SetSelected(bool)`. Selection uses the
+  native down texture and is preserved across hover/press transitions.
 - `Checkbox`: `text`, `checked`, `onCheck(self,checked)`; `SetCheck(value,silent)`.
+- `TextInput`: native Maui keyboard entry; `text`, `maxChars`, `onCommit(self,text)`;
+  `GetText`, `SetText`, `Commit`, `SetEnabled`. Enter commits, Escape restores the
+  last committed text. Returning false from onCommit rejects the edit. A partially
+  clipped field is hidden so native text and input cannot escape its viewport.
+- `Slider`: `min`, `max`, `step`, `value`, `onChange(self,value)`, `onPreview(self,value)`;
+  `SetValue(value,silent)`, `SetEnabled`. Dragging snaps to steps; programmatic
+  values are clamped without snapping. Preview updates are immediate; onChange
+  commits on release or after `commitDelay` seconds without motion (default .3).
+  Release does not repeat an already committed idle value. Captured drag ends on
+  hide or destruction. Thumb/track textures use the native options slider skin.
+- `NumberInput`: integer text field plus slider bound to one `Value`; `min`, `max`,
+  `step`, `value`, `onChange(self,value)`, `SetValue(value,silent)`, `SetEnabled`.
+  Exposes `Input` and `Slider`. Enter applies typed values, rounding/clamping to
+  the integer range; invalid text resets. Slider steps do not restrict text entry.
+  `commitDelay` is forwarded to its slider. Text entry commits immediately on Enter.
 - `Bar`: `value` in [0,1], `track`, `color`; `SetValue(value,max)` follows parent resize.
 - `Shape`: rectangle, `kind='border'` (`thickness`), `circle`, `triangle` (`segments`, default 48), or custom alpha `texture`.
 - `Dim`: fills its parent; default translucent black, configurable ARGB `color`.
@@ -48,11 +64,20 @@ Clipping changes rendered primitive bounds and bitmap UVs, preserving the logica
 
 All accept `x`, `y`, `width`, `height`, `depth`, `name` where relevant. A primitive's native renderer is `FDVisual`. Decorative controls can `DisableHitTest()`. For custom clickable icons assign `HandleEvent` and call `UI.Interactive(control)` to create a clipped native hit surface. Unhandled events return false and bubble to their parent.
 
+Checkbox onCheck and slider/numeric onChange callbacks may return their existing request
+ticket (`Status()` method). While that latest ticket is pending, silent setters
+retain the user's displayed value instead of repainting an older confirmed one.
+Once it completes, fails or times out, the next silent setter reconciles with
+confirmed state. A newer edit replaces the tracked ticket, so older acknowledgements
+cannot reset it. This is control behavior; it does not change Exchange's confirmed
+Get values or introduce a new UI/config binding system. Numeric text fields use
+native skinnable text-entry borders.
+
 ## Windows, tabs and scrolling
 
 Windows expose `Client`, `Title`, `TitleBar`, `CloseButton`, `ResizeGrip`, `Focus()`, `SetSize(w,h)`, `SetMinimumSize(w,h)`, `SetDraggable(bool)`, `SetResizable(bool)` and `Close()`. The title bar drags; the lower-right grip resizes. Minimums apply to the outer window. Draggers capture movement until release/cancel and are destroyed with their window. Closing hides by default; `onClose(window)` can change this. `onResize(window)` is optional. Windows focus on clicks on their controls; tooltips should derive depth from their owning window.
 
-Tabs expose `Add(id,title)` returning an owned page, and `Select(id)`. Hidden pages preserve state. Tabs retain a fixed button width (`tabWidth`, default 136); extra buttons clip if their header is too narrow.
+Tabs expose `Add(id,title)` returning an owned page, `Select(id)` and `Remove(id)`. Removing a tab destroys its page/button and selects the first remaining page if needed. Hidden pages preserve state. Tabs retain a fixed button width (`tabWidth`, default 136); extra buttons clip if their header is too narrow.
 
 Scroll exposes `Content`, `ScrollTo(x,y)`, `OffsetX`, `OffsetY`, plus Maui's `GetScrollValues`, `IsScrollable`, `ScrollSetTop`, `ScrollLines`, `ScrollPages`. Resize `Content.Width/Height` when content changes; viewport resize and shrinking content clamp offsets. Wheel scrolls vertically, Shift-wheel horizontally. The vertical track and thumb support clicking/dragging and hide automatically when no vertical overflow exists. Content never scales to fit.
 
