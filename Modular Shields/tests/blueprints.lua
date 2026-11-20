@@ -31,7 +31,16 @@ for _,f in ipairs(factions) do
         all.Unit[id]={Source='/mods/ModularShields/units/'..id..'/'..id..'_unit.bp',Mod='test'}
     end
 end
+all.Unit.xea3204={Categories={'AIR','ENGINEER'},Economy={BuildRate=25},General={CapCost=0},Display={},Intel={VisionRadius=12}}
+all.Unit.mds0001={Source='/mods/ModularShields/units/mds0001/mds0001_unit.bp',Mod='test'}
 ModBlueprints(all)
+check(all.Unit.mds0001.ScriptClass=='MDS0001' and all.Unit.mds0001.CategoriesHash.INSIGNIFICANTUNIT,'Native construction helper has its own script and insignificant category')
+check(not all.Unit.mds0001.LifeBarRender and all.Unit.mds0001.StrategicIconName=='' and all.Unit.mds0001.Display.HideLifebars,'Helpers suppress all native bars and icons')
+check(all.Unit.mds0001.Economy.NeedToFaceTargetToBuild==false and not all.Unit.mds0001.General.BuildBones,'Headless workers never wait for a drone arm or body rotation')
+check(all.Unit.mds0001.CategoriesHash.DUMMYUNIT and all.Unit.mds0001.CategoriesHash.INVULNERABLE and not all.Unit.mds0001.CategoriesHash.SELECTABLE,'Helpers are nonselectable invulnerable dummy units')
+check(all.Unit.mds0001.CategoriesHash.REPAIR,'Construction helper retains the native REPAIR capability category')
+check(all.Unit.mds0001.Intel.VisionRadius==0 and not all.Unit.mds0001.AI.InitialAutoMode,'Invisible helpers grant no scouting or independent automation')
+check(all.Unit.xea3204.Economy.BuildRate==25 and all.Unit.xea3204.Intel.VisionRadius==12,'Stock drones remain unmodified')
 check(called,'Previous blueprint hook remains chained')
 -- These blueprint capability names are present in the installed stock units.
 -- Upgrade orders are enabled by the upgrade links, not a RULEUCC_Upgrade cap.

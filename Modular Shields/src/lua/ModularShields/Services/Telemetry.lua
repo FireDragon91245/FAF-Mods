@@ -29,9 +29,11 @@ local function Snapshot(host)
             end
         end
     end
+    local repair=import('/mods/ModularShields/lua/ModularShields/Behaviors/Repair.lua').Export
+    local repairMass,repairEnergy,requestedMass,requestedEnergy=repair.Consumption(host)
     return {HP=hp,MaxHP=max,Regen=regen,BaseRegen=base,ModuleRegen=module,NeighborRegen=neighbor,
         BaseHP=stats.BaseHP or stats.ShieldMaxHP,ModuleHP=stats.ModuleHP or 0,NeighborHP=stats.NeighborHP or 0,
-        Damage=total/(Window/10),DamageWindow=Window/10,Status=status,RepairMass=host.ModuleRepairMass or 0}
+        Damage=total/(Window/10),DamageWindow=Window/10,Status=status,RepairMass=repairMass,RepairEnergy=repairEnergy,RepairMassRequested=requestedMass,RepairEnergyRequested=requestedEnergy}
 end
 Export={Damage=Damage,Snapshot=Snapshot}
 return Export

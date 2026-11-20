@@ -162,7 +162,7 @@ local function MakeGenerator(Base)
                 ActualEnergy=self:GetConsumptionPerSecondEnergy(),
                 NativeAdjacency=self.EnergyMaintAdjMod or 1,
                 PowerProviders=self.ModulePowerProviders or 0,
-                Queue=table.deepcopy(s.Queue), QueueCount=table.getn(s.Queue), RepairMass=self.ModuleRepairMass or 0,
+                Queue=table.deepcopy(s.Queue), QueueCount=table.getn(s.Queue), RepairMass=Repair.Consumption(self),
                 Job = job and { Id = job.JobId, Module = job.ModuleId, State = job.State,Kind=job.Kind or 'Install',
                     Progress = job.PaidWork / job.Quote.Work, MassSpent = job.MassSpent, EnergySpent = job.EnergySpent } or false }
             local messages=import(root..'Services/Communication.lua').Export
@@ -199,7 +199,7 @@ local function MakeGenerator(Base)
                 if self.Loadout.Queue[1] then self.Loadout.Queue[1].State = self.InstallPaused and 'Paused' or 'Queued' end
             elseif action == 'repair' then
                 if type(value)=='boolean' then self.RepairPaused=value else self.RepairPaused=not self.RepairPaused end
-                if self.RepairPaused then self.ModuleRepairMass=0 end
+                if self.RepairPaused then Repair.Stop(self) end
             end
             self.ModuleReason = reason and (reason.Code..(reason.Module and ': '..reason.Module or ''))
             self:ReconcileModules(); Jobs.Start(self,R)
@@ -250,7 +250,7 @@ local function MakeGenerator(Base)
         },
         OnGiven = function(self,newUnit)
             AdjacencyEffects.Clear(self)
-            Jobs.Stop(self);Assist.ReleaseAll(self)
+            Jobs.Stop(self);Assist.ReleaseAll(self);Repair.Stop(self)
             if newUnit.Loadout then Transfer.Restore(newUnit,self.TransferSnapshot or Transfer.Snapshot(self,false)) end
             Base.OnGiven(self,newUnit)
         end,
@@ -258,7 +258,7 @@ local function MakeGenerator(Base)
             import(root..'Services/Communication.lua').Export.Remove(self)
             import(root..'Services/DebugConfig.lua').Export.Untrack(self)
             AdjacencyEffects.Clear(self)
-            Jobs.Stop(self);Assist.ReleaseAll(self)
+            Jobs.Stop(self);Assist.ReleaseAll(self);Repair.Stop(self)
             Combat.Unregister(self)
             self.BarrierActive=false;self.BarrierRecords=nil
             if self.IsBeingTransferred then self.TransferSnapshot=Transfer.Snapshot(self,false) end
@@ -268,7 +268,7 @@ local function MakeGenerator(Base)
             import(root..'Services/Communication.lua').Export.Remove(self)
             import(root..'Services/DebugConfig.lua').Export.Untrack(self)
             AdjacencyEffects.Clear(self)
-            Jobs.Stop(self);Assist.ReleaseAll(self)
+            Jobs.Stop(self);Assist.ReleaseAll(self);Repair.Stop(self)
             Combat.Unregister(self)
             self.BarrierActive=false;self.BarrierRecords=nil
             Base.OnKilled(self,instigator,damageType,overkillRatio)

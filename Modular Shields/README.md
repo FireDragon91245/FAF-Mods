@@ -1,3 +1,47 @@
+Version 40 fixes automatic module assistance for Kennel drones and all Hive tiers.
+Docked drones replace their native idle return task before guarding a module job.
+They fly into their actual build range first; guarding a healthy generator alone
+does not make the native drone leave its station. Scan candidates are checked
+against the station's actual radius instead of accepting broad-phase overlaps.
+The scan starts when stations/pods are created, including rebuilt Kennel drones.
+Manual commands and native work retain priority; station pause, production and
+automation controls are respected. Repair Station Control remains optional, with
+module assistance supported with either or both of its restrictions enabled.
+
+Version 39 unifies support under one fully hidden helper per assisted target.
+Repairs advance in paid 100ms slices instead of one-second HP bursts. Unfinished
+units use native construction, including after the commander stops building and
+moves away. Repair retains its existing mass price; construction pays native
+mass and energy costs. Helper spending and requested resources are attributed to
+the shield's native unit panel without charging the shield a second time.
+
+Helpers have no visible mesh, health/progress bars, strategic icon, selection,
+collision, sounds or build effects. They cannot take damage, be killed, reclaimed
+or captured, and native targeting is disabled. Ignore Resources supports timed
+repair and native construction with zero displayed/charged helper costs. Repairs
+stop for reclaim, pause, loss of dome coverage, destruction or army transfer.
+Only chassis HP is repaired; shield dome HP and the source generator are excluded.
+Completed repair uses helper-owned native economy events so moving/airborne units
+can be supported without the movement restrictions of native repair orders.
+
+Version 38 restores native REPAIR capability for construction helpers, fixes
+range checks for FAF's XOR operator, and shares repair work only among damaged
+or unfinished targets. Healthy neighbors
+no longer consume repair target slots or dilute the HP budget. Other T4 shield
+generator buildings receive chassis repairs; the source generator stays excluded.
+Repair does not heal shield domes.
+
+Version 37: repair modules heal friendly mobile units as well as structures, and
+assist unfinished units inside the dome. Construction shares the aura HP/s budget
+and uses native engineer work with normal mass and energy costs. Invisible native
+workers stop when the dome drops, repair is paused, a target leaves, or reclaim
+begins. Active reclaim orders suppress both healing and construction assistance.
+Idle automatic kennel drones discover module jobs within their station's assist
+radius, then return to native automation on completion. Explicit orders take priority.
+The speculative Fatboy tread override has been removed; stock tread rendering
+is restored. The original texture issue remains under investigation.
+Repair and construction changes still require in-game playtesting.
+
 Upgrade and cancellation clicks update immediately and reconcile with the simulation, including dependent queue cancellation and cancelling requests that have not yet received a job ID. The window remembers its geometry per FAF profile, with horizontal and vertical scrolling when resized.
 
 Requires **FireDragon Mod Loader v17** installed and enabled as a normal FAF mod (shared core dependency).

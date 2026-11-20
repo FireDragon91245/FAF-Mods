@@ -156,7 +156,7 @@ local function Tooltip(entry,state)
     if d.ShieldMaxHP and d.ShieldMaxHP~=0 then add(string.format('%+.0f maximum shield HP',sign*d.ShieldMaxHP)..suffix,Colors.HP) end
     if d.ShieldRegen and d.ShieldRegen~=0 then add(string.format('%+.0f shield HP / second',sign*d.ShieldRegen)..suffix,Colors.Regen) end
     if d.ShieldSize and d.ShieldSize~=0 then add(string.format('%+.0f shield radius',sign*d.ShieldSize/2)..suffix,Colors.Range) end
-    if d.RepairBudget and d.RepairBudget~=0 then add(string.format('%+.0f structure HP / second',sign*d.RepairBudget)..suffix,Colors.Regen) end
+    if d.RepairBudget and d.RepairBudget~=0 then add(string.format('%+.0f unit HP / second',sign*d.RepairBudget)..suffix,Colors.Regen) end
     for _,text in ipairs(Descriptions[row.Family] or {}) do add(text,row.Family=='regen' and Colors.Regen or Colors.Special) end
     if row.Id=='impenetrable' then
         add('Requires ALL installed special modules:',Colors.Special)

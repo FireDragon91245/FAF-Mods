@@ -13,6 +13,37 @@ end
 local R = load('Bootstrap.lua').Build(load)
 function ModBlueprints(all)
     previous(all)
+    local worker = table.deepcopy(all.Unit.xea3204)
+    if worker then
+        local placeholder = assert(all.Unit.mds0001)
+        worker.BlueprintId,worker.Source,worker.Mod='mds0001',placeholder.Source,placeholder.Mod
+        worker.ScriptModule=root..'/units/mds0001/mds0001_script.lua'
+        worker.ScriptClass='MDS0001'
+        -- Native IssueRepair rejects workers without the REPAIR category.
+        worker.Categories={'UEF','AIR','MOBILE','ENGINEER','REPAIR','DUMMYUNIT','INSIGNIFICANTUNIT','INVULNERABLE','UNSELECTABLE','UNSPAWNABLE','UNTARGETABLE'}
+        worker.CategoriesHash=table.hash(worker.Categories)
+        worker.Economy.BuildRate=0
+        worker.Economy.BuildCostMass=0
+        worker.Economy.BuildCostEnergy=0
+        worker.Economy.BuildTime=1
+        worker.Economy.MaxBuildDistance=100
+        worker.Economy.NeedToFaceTargetToBuild=false
+        worker.General.CapCost=0
+        worker.AI={InitialAutoMode=false}
+        worker.Intel={VisionRadius=0}
+        worker.StrategicIconName=''
+        worker.LifeBarRender=false
+        worker.LifeBarSize=0
+        worker.Display.HideLifebars=true
+        worker.Audio={}
+        worker.General.BuildBones=nil
+        worker.Defense=worker.Defense or {}
+        worker.Defense.EconomyThreatLevel=0
+        worker.Defense.AirThreatLevel=0
+        worker.Defense.SurfaceThreatLevel=0
+        worker.Wreckage=nil
+        all.Unit.mds0001=worker
+    end
     for _, faction in ipairs(R.Config.Factions) do
         local original = assert(all.Unit[faction.Base], 'Missing stock shield ' .. faction.Base)
         for _, tier in ipairs({3,4}) do

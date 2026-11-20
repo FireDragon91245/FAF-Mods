@@ -143,3 +143,66 @@ mods one at a time. Do not claim compatibility or balance before recording resul
 - Damage the shield and keep firing, then stop and wait for its native regeneration
   delay. Vanilla/neighbor rows show zero during the delay and while full/offline;
   both become positive while healing after the delay. Module regen works under fire.
+
+## Version 36 regression scenarios
+
+- Damage a friendly tank, aircraft and building inside a repair-equipped dome;
+  all should heal using mass, without affecting shield regeneration behavior.
+- Start an unfinished unit under the dome; verify native build progress and both
+  resource costs, then pause repair, switch off the shield, or move the target out.
+  Construction assistance must stop; completion must run normal unit callbacks.
+- Reclaim a damaged or unfinished friendly unit under the dome. Verify no aura
+  healing or construction fights the reclaim, including with multiple reclaimers.
+  Stop reclaim and verify assistance resumes. Repeat with an assisting engineer
+  killed during reclaim.
+- Leave an automatic kennel drone idle near a full-health shield; install a
+  module. Verify it flies over, contributes rate/beams/progress and returns to
+  normal station assistance when finished. Move/stop the drone manually during
+  work; the explicit order must win. Test both kennel tiers and disabled automode.
+- Fatboy tread rendering uses the stock implementation again in version 37.
+  The original texture corruption has not yet been diagnosed.
+
+## Version 38 repair regressions
+
+- Leave a building unfinished about 10 units from a repair-equipped generator.
+  Stop its engineer. The aura must advance and finish it, charging normal mass
+  and energy. Pause repairs and confirm construction stops, then resumes.
+- Place at least 60 healthy friendly units around the generator and damage another
+  T4 shield generator inside its dome. Repair should reach the damaged building
+  without sharing its budget with healthy neighbors. The source generator must
+  not repair itself. Dome HP must receive no repair-aura healing.
+- Reclaim that damaged generator and verify repair immediately stops opposing it.
+
+## Version 39 unified support
+
+- Start a building with a commander, then cancel the command and move away once
+  a foundation exists. Verify progress continues and normal completion occurs.
+- Damage a unit and watch HP over successive sim ticks: support must be smooth,
+  rather than adding the entire one-second repair budget at once. Repeat while
+  the target moves and with an aircraft.
+- Select the supporting shield. Its native economy panel must include all helper
+  mass and energy requests/consumption, alongside the generator's own costs.
+- With all health/progress bars forced on, zoom in/out and attempt click/box
+  selection around helpers. No helper model, bars, icons, beams, sounds or effects
+  should appear. Enemy targeting and damage must not affect them.
+- Toggle Ignore Resources while work is active. Both repair and construction must
+  keep progressing with zero helper costs; toggling it off restores payment.
+- Pause repair and verify work and attributed costs stop. Resume, reclaim the
+  target, remove coverage, and destroy/transfer the host; owned helpers must stop.
+
+## Version 40 automatic station module assistance
+
+- With only Modular Shields and its loader enabled, place each Kennel/Hive tier
+  within its ordinary assist radius of a healthy modular shield. Wait for pods
+  to dock, then queue a module: idle workers must move/guard automatically and
+  increase the shield's module work rate. The host pays the module's normal cost.
+- Repeat with Repair Station Control enabled, first with both restrictions off,
+  then each restriction individually, then both on. Workers must keep assisting
+  module jobs without repeated stop/start orders and resume ordinary work afterward.
+- Disable station automation/production or pause it before queuing a module;
+  workers must stay idle. Re-enable it and confirm automatic module assistance.
+- Give a pod an explicit move, repair, reclaim or guard order. Module automation
+  must preserve it. Kill/rebuild a Kennel pod and confirm the replacement can
+  automatically assist modules too.
+- Run `python -B tests/station_runtime.py` and again with `--rsc` with the game
+  closed for disposable native engine checks of both configurations.

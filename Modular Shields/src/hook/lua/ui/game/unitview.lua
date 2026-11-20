@@ -10,7 +10,9 @@ function UpdateWindow(info)
         local copy={};for key,value in pairs(info) do copy[key]=value end
         local mass=live and live.RepairMass or 0
         copy.massConsumed=(info.massConsumed or 0)+mass
-        copy.massRequested=(info.massRequested or 0)+mass
+        copy.massRequested=(info.massRequested or 0)+(live and live.RepairMassRequested or mass)
+        copy.energyConsumed=(info.energyConsumed or 0)+(live and live.RepairEnergy or 0)
+        copy.energyRequested=(info.energyRequested or 0)+(live and live.RepairEnergyRequested or 0)
         info=copy
     end
     ModularUpdateWindow(info)

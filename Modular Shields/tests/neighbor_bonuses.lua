@@ -47,7 +47,7 @@ local _,diminishing=R.Neighbors.Evaluate(rules,six)
 check(diminishing[1].Value==1.96875,'Diminishing weights use a geometric sum without dialect-dependent exponent operators')
 -- Actual native adapter: only base + neighbor go through the damage-delayed thread.
 local library={LargestShieldDiameter=0}
-function import() return library end
+function import(path) if path:find('Behaviors/Repair.lua',1,true) then return {Export=load('Behaviors/Repair.lua')} end;return library end
 function IsDestroyed(u) return u.Destroyed end
 local tick=100
 function GetGameTick() return tick end

@@ -21,7 +21,6 @@ Export = {
     NeighborEdgeTolerance = .05,
     RepairFactor = .75,
     RepairHPPerSecond = 30,
-    RepairTargetLimit = 24,
     Caps = { ShieldMaxHP = 4, ShieldSize = 3, ShieldRegen = 5, RepairBudget = 1000,
         EnergyMultiplier = 2, RepairMassMultiplier = 3, ModuleSlots=64 },
     Floors = { EnergyMultiplier = .1, RepairMassMultiplier = .1 },

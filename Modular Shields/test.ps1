@@ -27,7 +27,16 @@ try {
     $ran = 0
     foreach ($test in $tests | Where-Object { $_ -like $Filter }) {
         Write-Host "== $test" -ForegroundColor Cyan
-        & lua (Join-Path 'tests' "$test.lua")
+        if ($test -eq 'faf_repair') {
+            $engineLua = Join-Path (Split-Path -Parent $root) 'FireDragon Mod Loader/dist/lua-script-test.exe'
+            if (-not (Test-Path -LiteralPath $engineLua)) {
+                if ($SkipNativeBuild) { throw 'Build FireDragon Mod Loader before running the FAF dialect regression with -SkipNativeBuild.' }
+                & (Join-Path (Split-Path -Parent $root) 'FireDragon Mod Loader/build.ps1') -SkipTests
+            }
+            & $engineLua (Join-Path 'tests' "$test.lua")
+        } else {
+            & lua (Join-Path 'tests' "$test.lua")
+        }
         if ($LASTEXITCODE -ne 0) { throw "Failed: $test" }
         $ran++
     }

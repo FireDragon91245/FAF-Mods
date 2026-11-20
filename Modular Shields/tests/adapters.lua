@@ -164,29 +164,6 @@ check(host.Loadout.Queue[1].PaidWork==paid and #host.Loadout.Queue==1,'Storage l
 host.Loadout.BonusSlots=1;assert(coroutine.resume(co))
 check(host.Loadout.Queue[1].State=='Building' and pending~=event,'Restoring mass storage resumes the same installation')
 Jobs.Stop(host)
-local repair=import('/mods/ModularShields/lua/ModularShields/Behaviors/Repair.lua').Export
-categories={STRUCTURE=1}
-local mass=1
-local target={EntityId=2,Army=1,HP=50,Blueprint={Economy={BuildCostMass=100}}}
-function target:GetPosition() return {1,0,0} end
-function target:GetMaxHealth() return 100 end
-function target:GetHealth() return self.HP end
-function target:GetFractionComplete() return 1 end
-function target:SetHealth(_,hp) self.HP=hp end
-local brain={}
-function brain:GetUnitsAroundPoint() return {target} end
-function brain:TakeResource(_,requested) local paid=math.min(mass,requested);mass=mass-paid;return paid end
-host={Sync={},Army=1,EntityId=1,MyShield={IsUp=function() return true end,GetPosition=function() return {0,0,0} end},ModuleStats={ShieldSize=40,RepairBudget=30},GetAIBrain=function() return brain end}
-repair.Tick(host,R)
-check(math.abs(target.HP-(50+1/.75))<1e-7 and mass==0,'Repair only delivers HP paid with actual mass')
-check(host.ModuleRepairMass==1,'Native display attribution reports exact paid mass with no second withdrawal')
-local hp=target.HP;repair.Tick(host,R)
-check(target.HP==hp,'Empty mass storage gives no free healing')
-check(host.ModuleRepairMass==0,'Resource starvation clears native repair attribution')
-target.Army=2;mass=100;repair.Tick(host,R)
-check(target.HP==hp and mass==100,'Different army receives no repair or charge')
-host.ModuleRepairMass=20;host.RepairPaused=true;repair.Tick(host,R)
-check(host.ModuleRepairMass==0,'Pausing repair clears native consumption attribution')
 -- Resource-free installation still takes normal time unless InstantUpgrade is set.
 R.Config.Debug.IgnoreResources=true
 host=newHost();job=assert(R.Core.RequestInstall(host.Loadout,'power_1',R.Registry,R.Config))
@@ -221,13 +198,6 @@ end
 check(math.abs(job.MassSpent-actualMass)<.000001 and math.abs(actualMass-job.Quote.Mass*(1-freeWork/job.Quote.Work))<.000001,
     'resuming paid work charges only work not already completed for free')
 
--- Free repair at zero mass does not debit or report consumption.
-target.Army=1;target.HP=50;mass=0
-host={Sync={},Army=1,MyShield={IsUp=function() return true end,GetPosition=function() return {0,0,0} end},
-    ModuleStats={ShieldSize=40,RepairBudget=30},GetAIBrain=function() return brain end}
-R.Config.Debug.IgnoreResources=true;repair.Tick(host,R)
-check(target.HP==80 and mass==0 and host.ModuleRepairMass==0,'ignore resources heals without mass or phantom consumption')
-R.Config.Debug.IgnoreResources=false
 -- Turning resource bypass on revives an energy-starved dome, and off restores draining.
 shield.Enabled=true;shield.DepletedByDamage=false;shield.NoEnergyToSustain=true;shield.DepletedByEnergy=true
 shield.HP=100

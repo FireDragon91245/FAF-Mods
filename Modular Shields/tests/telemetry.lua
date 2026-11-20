@@ -2,6 +2,8 @@ table.getn=table.getn or function(t) return #t end
 local tick=100
 function GetGameTick() return tick end
 function IsDestroyed(s) return s.Destroyed end
+local Repair=assert(loadfile('src/lua/ModularShields/Behaviors/Repair.lua'))()
+function import() return {Export=Repair} end
 local env=setmetatable({}, {__index=_G})
 local T=assert(loadfile('src/lua/ModularShields/Services/Telemetry.lua','t',env))()
 local count=0
@@ -26,7 +28,7 @@ check(v.Regen==0 and v.Status=='Offline','Collapsed shields do not report active
 -- The native shield hook records actual absorbed HP, including mitigation.
 Shield={ApplyDamage=function(self,_,amount) self.HP=self.HP-amount*.5 end}
 Class=function(base) return function(def) return setmetatable(def,{__index=base}) end end
-function import() return {Export=T} end
+function import(path) if path:find('Behaviors/Repair.lua',1,true) then return {Export=Repair} end;return {Export=T} end
 assert(loadfile('src/hook/lua/shield.lua'))()
 s.HP=800;s.Owner=h;Shield.ApplyDamage(s,nil,100,{},'Normal',true)
 check(T.Snapshot(h).Damage==10,'Shield hook records actual health loss after native damage processing')
