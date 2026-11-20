@@ -68,6 +68,9 @@ invisible before you enabled the mod are not fixed; only new builds are covered.
 
 ## Development
 
+Version 5 fixes `Invalid args to yield(); expected tick count` warnings when the
+render watch finishes. Watch threads now return no values to FAF's scheduler.
+
 ```powershell
 ./test.ps1              # Lua tests, syntax checks and import-path lint (needs lua/luac 5.4)
 ./build.ps1             # test + bundle into dist/InstaBuildRenderFix (+ versioned zip)

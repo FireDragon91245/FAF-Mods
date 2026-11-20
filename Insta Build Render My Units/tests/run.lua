@@ -43,7 +43,8 @@ local function never() return false end
 local sim = newSim()
 local unit = newUnit(sim)
 sim.at(1, function() unit:HideBone(0, true) end)
-check(Guard.Watch(unit, sim.wait, sim.now, never), 'Stuck factory hide is repaired')
+Guard.Watch(unit, sim.wait, sim.now, never)
+check(not unit.hidden, 'Stuck factory hide is repaired')
 check(not unit.hidden and sim.tick == 1 + Guard.HoldTicks, 'Repair happens once the hide outlasts HoldTicks')
 check(table.concat(unit.calls, ',') == 'show,land,enh', 'Repair re-applies land and enhancement bones')
 
@@ -51,12 +52,14 @@ check(table.concat(unit.calls, ',') == 'show,land,enh', 'Repair re-applies land 
 sim = newSim(); unit = newUnit(sim)
 unit:ShowBone(0, true)
 sim.at(1, function() unit:HideBone(0, true) end)
-check(Guard.Watch(unit, sim.wait, sim.now, never) and not unit.hidden, 'Late upgrade hide is repaired')
+Guard.Watch(unit, sim.wait, sim.now, never)
+check(not unit.hidden, 'Late upgrade hide is repaired')
 
 -- Hidden before completion and never shown again.
 sim = newSim(); unit = newUnit(sim)
 unit:HideBone(0, true)
-check(Guard.Watch(unit, sim.wait, sim.now, never) and sim.tick == Guard.HoldTicks, 'Hide carried over from construction is repaired')
+Guard.Watch(unit, sim.wait, sim.now, never)
+check(not unit.hidden and sim.tick == Guard.HoldTicks, 'Hide carried over from construction is repaired')
 
 -- Re-hiding keeps the original hide time.
 sim = newSim(); unit = newUnit(sim)
@@ -71,7 +74,8 @@ for _, length in ipairs({ 3, 4 }) do
     sim.at(1, function() unit:HideBone(0, true) end)
     sim.at(1 + length, function() unit:ShowBone(0, true) end)
     unit.calls = {}
-    check(not Guard.Watch(unit, sim.wait, sim.now, never), length .. '-tick hide is not repaired')
+    Guard.Watch(unit, sim.wait, sim.now, never)
+    check(not unit.hidden, length .. '-tick hide ends normally')
     check(sim.tick == Guard.WatchTicks and table.getn(unit.calls) == 1, 'Watch ends after the window without extra ShowBone')
 end
 
@@ -80,22 +84,49 @@ for _, flag in ipairs({ 'TeleportFx_IsInvisible', 'RenderGuardInStorage' }) do
     sim = newSim(); unit = newUnit(sim)
     unit[flag] = true
     unit:HideBone(0, true)
-    check(not Guard.Watch(unit, sim.wait, sim.now, never) and unit.hidden, flag .. ' keeps the unit hidden')
+    Guard.Watch(unit, sim.wait, sim.now, never)
+    check(unit.hidden, flag .. ' keeps the unit hidden')
 end
 
 -- Hide after the watch window is outside the guard's responsibility.
 sim = newSim(); unit = newUnit(sim)
 sim.at(Guard.WatchTicks + 1, function() unit:HideBone(0, true) end)
-check(not Guard.Watch(unit, sim.wait, sim.now, never), 'Hides after the window are ignored')
+Guard.Watch(unit, sim.wait, sim.now, never)
+check(sim.tick == Guard.WatchTicks and #unit.calls == 0, 'Hides after the window are ignored')
 
 -- Dead or destroyed units stop the watch.
 sim = newSim(); unit = newUnit(sim)
 unit:HideBone(0, true)
 sim.at(2, function() unit.Dead = true end)
-check(not Guard.Watch(unit, sim.wait, sim.now, never) and sim.tick == 2, 'Dead units stop the watch')
+Guard.Watch(unit, sim.wait, sim.now, never)
+check(sim.tick == 2 and unit.hidden, 'Dead units stop the watch')
 sim = newSim(); unit = newUnit(sim)
 unit:HideBone(0, true)
-check(not Guard.Watch(unit, sim.wait, sim.now, function() return sim.tick >= 3 end) and sim.tick == 3, 'Destroyed units stop the watch')
+Guard.Watch(unit, sim.wait, sim.now, function() return sim.tick >= 3 end)
+check(sim.tick == 3 and unit.hidden, 'Destroyed units stop the watch')
+
+-- Model FAF's scheduler: a yielded result is a numeric tick count; completion
+-- must have no result. Boolean final returns previously triggered warning spam.
+for _, ending in ipairs({ 'timeout', 'repair', 'dead', 'destroyed' }) do
+    sim = newSim(); unit = newUnit(sim)
+    if ending ~= 'timeout' then unit:HideBone(0, true) end
+    if ending == 'dead' then sim.at(2, function() unit.Dead = true end) end
+    local watcher = coroutine.create(function()
+        return Guard.Watch(unit, coroutine.yield, sim.now,
+            function() return ending == 'destroyed' and sim.tick >= 2 end)
+    end)
+    while true do
+        local results = table.pack(coroutine.resume(watcher))
+        check(results[1], ending .. ': watch resumes successfully')
+        if coroutine.status(watcher) == 'dead' then
+            check(results.n == 1, ending .. ': completion returns no scheduler instruction')
+            break
+        end
+        check(results.n == 2 and type(results[2]) == 'number' and results[2] >= 1,
+            ending .. ': yields only a valid tick count')
+        sim.wait(results[2])
+    end
+end
 
 -- Watch eligibility.
 check(Guard.ShouldWatch(newUnit(sim), {}), 'Built units are watched')

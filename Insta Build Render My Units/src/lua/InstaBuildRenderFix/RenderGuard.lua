@@ -61,18 +61,18 @@ function Repair(unit)
 end
 
 --- Thread body: watch a freshly completed unit and repair it at most once.
+-- FAF treats coroutine results as wait instructions, including the final return.
+-- Finish without values so completion cannot be mistaken for an invalid yield.
 ---@param waitTicks fun(ticks: number)
 ---@param getTick fun(): number
 ---@param isDestroyed fun(unit): boolean
----@return boolean repaired
 function Watch(unit, waitTicks, getTick, isDestroyed)
     for _ = 1, WatchTicks do
         waitTicks(1)
-        if unit.Dead or isDestroyed(unit) then return false end
+        if unit.Dead or isDestroyed(unit) then return end
         if ShouldRepair(unit, getTick()) then
             Repair(unit)
-            return true
+            return
         end
     end
-    return false
 end
