@@ -9,7 +9,7 @@ UnitBlueprint {
         'UNSPAWNABLE',
         'UNTARGETABLE',
     },
-    Description = 'FireDragon Debug Tools energy storage',
+    Description = 'FireDragon: Debug Tools energy storage',
     Economy = {
         StorageEnergy = 1000000,
     },

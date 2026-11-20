@@ -3,9 +3,9 @@
 
 ActionName = 'firedragon_debug_tools_toggle'
 DefaultKey = 'Alt-Shift-D'
-Description = 'Toggle FireDragon Debug Tools panel'
+Description = 'Toggle FireDragon: Debug Tools panel'
 KeyAction = {
-    action = "UI_Lua import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Panel.lua').Toggle()",
+    action = "UI_Lua import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Panel.lua').Toggle()",
     category = 'mods',
 }
 

@@ -1,9 +1,9 @@
 -- Vanilla tools and optional mod-owned configuration, using only the shared API.
-local UI = import('/mods/FireDragonModLoader/lua/FireDragon/UI.lua').Export
-local Exchange = import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export
-local Keys = import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Keys.lua')
-local Messages=import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Messages.lua').Export
-local Bindings=import('/mods/FireDragonModLoader/lua/FireDragon/Bindings.lua').Export
+local UI = import('/mods/FireDragon Core & Loader/lua/FireDragon/UI.lua').Export
+local Exchange = import('/mods/FireDragon Core & Loader/lua/FireDragon/InformationExchange.lua').Export
+local Keys = import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Keys.lua')
+local Messages=import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Messages.lua').Export
+local Bindings=import('/mods/FireDragon Core & Loader/lua/FireDragon/Bindings.lua').Export
 local Economy=Bindings.DefineState(Exchange,{
     stateTopic=Messages.Economy,topic=Messages.SetResource,ordered=true,
     payload=function(op) return {Resource=op.Resource,Enabled=op.Value} end,
@@ -101,7 +101,7 @@ end
 
 local function AddShieldTab()
     if view.ModularControls or not Exchange.HasConfig(ShieldKey) then return end
-    local page = view.Tabs:Add('shields', 'Modular Shields')
+    local page = view.Tabs:Add('shields', 'FireDragon: Modular Shields')
     local scroll = UI.Scroll(page, {contentWidth=function() return math.max(280,page.Width()-20) end,contentHeight=350})
     UI.Fill(scroll,page,4)
     local content, controls, y = scroll.Content, {}, 6
@@ -142,7 +142,7 @@ local function Refresh()
 end
 local function Create()
     local frame=GetFrame(0)
-    local panel=UI.Window(frame,{name='FireDragon Debug Tools',title='FireDragon Debug Tools',
+    local panel=UI.Window(frame,{name='FireDragon Debug Tools',title='FireDragon: Debug Tools',
         x=frame.Width()-480,y=150,width=460,height=450,minWidth=420,minHeight=320})
     local tabs=UI.Tabs(panel.Client,{tabHeight=34})
     UI.At(tabs,panel.Client,8,8,function() return panel.Client.Width()-16 end,function() return math.max(0,panel.Client.Height()-42) end)

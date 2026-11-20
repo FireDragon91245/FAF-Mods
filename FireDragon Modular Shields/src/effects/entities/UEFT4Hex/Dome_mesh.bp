@@ -1,0 +1,9 @@
+MeshBlueprint {
+    LODs = {{
+        MeshName = '/mods/FireDragon Modular Shields/effects/entities/UEFT4Hex/HexDome_lod0.scm',
+        ShaderName = 'ModularHexDome',
+        LODCutoff = 1000,
+    }},
+    SortOrder = 1000,
+    StraddleWater = true,
+}

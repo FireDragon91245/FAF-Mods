@@ -9,8 +9,8 @@
 -- keeps a single GiveStorage bonus for one resource, so a mass boost wipes the energy
 -- boost (and vanilla's +100 energy) and vice versa.
 
-local function exchange() return import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export end
-local Messages=import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Messages.lua').Export
+local function exchange() return import('/mods/FireDragon Core & Loader/lua/FireDragon/InformationExchange.lua').Export end
+local Messages=import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Messages.lua').Export
 local started
 Helpers = { ENERGY = 'fdt0001', MASS = 'fdt0002' }
 

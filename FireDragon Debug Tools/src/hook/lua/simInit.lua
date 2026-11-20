@@ -1,6 +1,6 @@
 local FireDragonPreviousBeginSession=BeginSession
 function BeginSession()
-    import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Economy.lua').Start()
-    import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/InstantBuild.lua').Start()
+    import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Economy.lua').Start()
+    import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/InstantBuild.lua').Start()
     return FireDragonPreviousBeginSession()
 end

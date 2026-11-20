@@ -1,7 +1,7 @@
 -- ai_InstaBuild is a match-wide engine variable. Track menu requests in Sim;
 -- the engine exposes no documented getter for changes entered in the console.
-local Exchange=import('/mods/FireDragonModLoader/lua/FireDragon/InformationExchange.lua').Export
-local Messages=import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Messages.lua').Export
+local Exchange=import('/mods/FireDragon Core & Loader/lua/FireDragon/InformationExchange.lua').Export
+local Messages=import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Messages.lua').Export
 local started
 local enabled=false
 

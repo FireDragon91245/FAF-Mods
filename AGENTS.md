@@ -1,7 +1,7 @@
 # Local testing workflow
 
 - After changes are built, validated, and ready for in-game testing, install the latest affected mod packages into FAF's configured mods directory. The user explicitly wants installation included, without a separate confirmation.
-- Include the shared FireDragon Mod Loader when its package or a required dependency changes. Use its ownership-aware installer for the native loader/bootstrap.
+- Include the shared FireDragon Core & Loader when its package or a required dependency changes. Use its ownership-aware installer for the native loader/bootstrap.
 - Verify installed versions and package file hashes after installation, and remove obsolete mod files when updating packaged mods.
 - Do not change installed files while Forged Alliance is running or terminate the user's game. If it is running, report that it must be closed before installation can finish.
 

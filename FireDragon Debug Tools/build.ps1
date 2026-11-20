@@ -16,7 +16,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$name = 'FireDragonDebugTools'
+$name = 'FireDragon Debug Tools'
 $source = Join-Path $root 'src'
 $dist = Join-Path $root 'dist'
 $out = Join-Path $dist $name

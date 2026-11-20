@@ -1,9 +1,9 @@
 -- Exercise the real Exchange transport: all players share one match setting.
 table.getn = table.getn or function(t) return #t end
-local Exchange=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/InformationExchange.lua'))()
-local Transport=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/ExchangeTransport.lua'))()
+local Exchange=assert(loadfile('../FireDragon Core & Loader/src/lua/FireDragon/InformationExchange.lua'))()
+local Transport=assert(loadfile('../FireDragon Core & Loader/src/lua/FireDragon/ExchangeTransport.lua'))()
 local Messages=assert(loadfile('src/lua/FireDragonDebugTools/Messages.lua'))()
-local Bindings=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/Bindings.lua'))()
+local Bindings=assert(loadfile('../FireDragon Core & Loader/src/lua/FireDragon/Bindings.lua'))()
 local count=0
 local function check(value,message) count=count+1;assert(value,message) end
 local bus=Exchange.New({clock=function() return 0 end})

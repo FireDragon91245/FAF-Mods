@@ -1,6 +1,6 @@
-Requires **FireDragon Mod Loader v17** installed and enabled as a normal FAF mod (shared core dependency).
+Requires **FireDragon: Core & Loader v17** installed and enabled as a normal FAF mod (shared core dependency).
 
-# FireDragon Debug Tools
+# FireDragon: Debug Tools
 
 A small in-game debug panel for testing. The **Vanilla** tab has three toggles and a game-speed slider:
 
@@ -28,9 +28,9 @@ other speed requests are refused. Live observers cannot use the control.
 Multiplayer pause limits and resume delays still apply. The slider waits for
 session confirmation before accepting another request and reports refusals/timeouts.
 
-The **Modular Shields** tab appears only when the shield mod publishes
+The **FireDragon: Modular Shields** tab appears only when the shield mod publishes
 `ModularShields.Debug` through the shared Information Exchange. It edits the
-mod-owned ReadWrite configuration without importing Modular Shields. Boolean
+mod-owned ReadWrite configuration without importing FireDragon: Modular Shields. Boolean
 controls toggle instant module upgrades and ignored resource costs. Each numeric
 control has an integer text field (Enter to apply) and a stepped slider:
 
@@ -41,7 +41,7 @@ control has an integer text field (Enter to apply) and a stepped slider:
 | Additional slots | 0 | 0–50 / 1 |
 | Additional repair | 0 | 0–1000 / 10 |
 
-Shield settings affect all modular shields in the match. Modular Shields publishes
+Shield settings affect all modular shields in the match. FireDragon: Modular Shields publishes
 one Sim-owned configuration with validation and a Cheats authorization policy.
 The shared loader handles UI-to-Sim commands and authoritative sync internally;
 Debug Tools uses normal Get/SetPath access and generic ConfigStatus for refusals.
@@ -53,7 +53,7 @@ listed steps. These settings reset each match.
 
 ## Usage
 
-1. Enable **FireDragon Debug Tools** in the mod manager. It is a sim mod, so the host enables it.
+1. Enable **FireDragon: Debug Tools** in the mod manager. It is a sim mod, so the host enables it.
 2. Start a game with **cheats enabled**, or a single-player skirmish.
 3. Press **Alt-Shift-D** to show or hide the panel, then use the toggles or game-speed slider.
 
@@ -87,7 +87,7 @@ energy boost (and vice versa).
 
 ### Changing the key
 
-The action is listed as *Toggle FireDragon Debug Tools panel* in the **F1** key bindings
+The action is listed as *Toggle FireDragon: Debug Tools panel* in the **F1** key bindings
 dialog, under **Mods**. A key you bind there is applied from the next game on. Alt-Shift-D
 is only bound by default when it is not already used for something else.
 
@@ -95,7 +95,7 @@ is only bound by default when it is not already used for something else.
 
 ```powershell
 ./test.ps1              # Lua tests, syntax checks and import-path lint (needs lua/luac 5.4)
-./build.ps1             # test + bundle into dist/FireDragonDebugTools (+ versioned zip)
+./build.ps1             # test + bundle into dist/FireDragon Debug Tools (+ versioned zip)
 ./build.ps1 -Install    # also mirror into the FAF mods folder
 ```
 

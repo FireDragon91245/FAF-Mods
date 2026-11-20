@@ -24,7 +24,7 @@ FAF Mods/
     └── dist/                    (generated, ignored) bundled mod + zip
 ```
 
-Reference implementation: `Modular Shields/` (it adds generated icon artifacts and docs).
+Reference implementation: `FireDragon Modular Shields/` (it adds generated icon artifacts and docs).
 
 ## Naming
 
@@ -32,12 +32,12 @@ Reference implementation: `Modular Shields/` (it adds generated icon artifacts a
 |---|---|---|
 | Project folder | Readable, spaces allowed | `FireDragon Debug Tools` |
 | In-game mod folder (`<ModFolder>`) | No spaces or punctuation; it is the import root | `FireDragonDebugTools` |
-| Display name | `name` in `mod_info.lua`, anything goes | `FireDragon Debug Tools` |
+| Display name | `name` in `mod_info.lua`, anything goes | `FireDragon: Debug Tools` |
 | Own modules | `src/lua/<ModFolder>/...` | `src/lua/FireDragonDebugTools/Economy.lua` |
 
 FAF loads mod files through `/mods/<ModFolder>/...`. If the installed folder name and the
 import paths disagree, the mod silently breaks, so `test.ps1` rejects any `/mods/<X>/`
-reference where `X` is neither `<ModFolder>` nor the shared core `FireDragonModLoader`.
+reference where `X` is neither `<ModFolder>` nor the shared core `FireDragon Core & Loader`.
 
 ## src/mod_info.lua
 
@@ -52,7 +52,7 @@ enabled = true
 exclusive = false
 ui_only = false             -- true only when the mod has no sim hooks
 requires = { '3f98ee06-c20c-4fd6-a29e-d7e306fd2026' }
-requiresNames = { ['3f98ee06-c20c-4fd6-a29e-d7e306fd2026'] = 'FireDragon Mod Loader' }
+requiresNames = { ['3f98ee06-c20c-4fd6-a29e-d7e306fd2026'] = 'FireDragon: Core & Loader' }
 conflicts = {}
 before = {}
 after = { '3f98ee06-c20c-4fd6-a29e-d7e306fd2026' }
@@ -60,13 +60,13 @@ after = { '3f98ee06-c20c-4fd6-a29e-d7e306fd2026' }
 
 Sim mods (`ui_only = false`) must be enabled by the host and are synced to every player.
 
-New FireDragon mods depend on the normal **FireDragon Mod Loader v7** core mod.
-Use `import('/mods/FireDragonModLoader/lua/FireDragon/UI.lua').Export` for shared UI.
-See [the UI API](FireDragon%20Mod%20Loader/src/UI_LIBRARY.md).
-Use `import('/mods/FireDragonModLoader/lua/FireDragon/Storage.lua').Export.Open('MyMod')`
+New FireDragon mods depend on the normal **FireDragon: Core & Loader v7** core mod.
+Use `import('/mods/FireDragon Core & Loader/lua/FireDragon/UI.lua').Export` for shared UI.
+See [the UI API](FireDragon%20Core%20&%20Loader/src/UI_LIBRARY.md).
+Use `import('/mods/FireDragon Core & Loader/lua/FireDragon/Storage.lua').Export.Open('MyMod')`
 for local profile data that persists across sessions. The returned store provides
 `:Get(key, default)`, `:Set(key, value)` (saved immediately) and `:Remove(key)`.
-See [the storage API](FireDragon%20Mod%20Loader/src/STORAGE_API.md).
+See [the storage API](FireDragon%20Core%20&%20Loader/src/STORAGE_API.md).
 
 ## Hooks
 
@@ -140,6 +140,6 @@ Player-facing and bundled with the mod. Cover:
 ```powershell
 $project = 'My New Mod'; $folder = 'MyNewMod'
 New-Item -ItemType Directory "$project/src/lua/$folder", "$project/tests" | Out-Null
-Copy-Item 'Insta Build Render My Units/build.ps1', 'Insta Build Render My Units/test.ps1', 'Insta Build Render My Units/.gitignore' $project
+Copy-Item 'FireDragon Insta Build Render My Units/build.ps1', 'FireDragon Insta Build Render My Units/test.ps1', 'FireDragon Insta Build Render My Units/.gitignore' $project
 # edit $ModFolder in build.ps1 and test.ps1, write src/mod_info.lua with a new uid, README.md, tests/run.lua
 ```

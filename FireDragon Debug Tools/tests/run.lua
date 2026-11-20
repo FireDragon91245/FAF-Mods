@@ -35,8 +35,8 @@ local function newBrain(maxEnergy, maxMass)
     return brain
 end
 
-local Exchange=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/InformationExchange.lua'))()
-local Transport=assert(loadfile('../FireDragon Mod Loader/src/lua/FireDragon/ExchangeTransport.lua'))()
+local Exchange=assert(loadfile('../FireDragon Core & Loader/src/lua/FireDragon/InformationExchange.lua'))()
+local Transport=assert(loadfile('../FireDragon Core & Loader/src/lua/FireDragon/ExchangeTransport.lua'))()
 local Messages=assert(loadfile('src/lua/FireDragonDebugTools/Messages.lua'))()
 local function newEconomy(brains, options)
     options=options or {};world={}
@@ -169,7 +169,7 @@ check(K.Bindings({ [K.DefaultKey] = 'something_else' }) == nil, 'An occupied def
 b = K.Bindings({ ['F7'] = K.ActionName, [K.DefaultKey] = 'something_else' })
 check(b and b.F7 == K.KeyAction and b[K.DefaultKey] == nil, 'User bindings for the action are restored instead')
 check(K.KeyAction.category == 'mods' and not string.find(K.ActionName, '-', 1, true), 'Action is valid for the keymapper')
-check(string.find(K.KeyAction.action, "/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Panel.lua", 1, true), 'Action opens the panel')
+check(string.find(K.KeyAction.action, "/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Panel.lua", 1, true), 'Action opens the panel')
 
 -- Startup registers the exchange endpoint; no custom callback/sync hooks remain.
 local started={}
@@ -178,8 +178,8 @@ local hook=loadModule('src/hook/lua/simInit.lua',{
     import=function(path) return {Start=function() started[path]=true end} end,
 })
 check(hook.BeginSession()=='previous'
-    and started['/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Economy.lua']
-    and started['/mods/FireDragonDebugTools/lua/FireDragonDebugTools/InstantBuild.lua'],
+    and started['/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Economy.lua']
+    and started['/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/InstantBuild.lua'],
     'Sim startup registers both Exchange services')
 
 local actions = loadModule('src/hook/lua/keymap/keyactions.lua', { keyActions = {}, import = function() return K end })

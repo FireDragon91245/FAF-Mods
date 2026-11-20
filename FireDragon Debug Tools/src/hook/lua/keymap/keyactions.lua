@@ -1,2 +1,2 @@
-local FireDragonKeys = import('/mods/FireDragonDebugTools/lua/FireDragonDebugTools/Keys.lua')
+local FireDragonKeys = import('/mods/FireDragon Debug Tools/lua/FireDragonDebugTools/Keys.lua')
 keyActions[FireDragonKeys.ActionName] = FireDragonKeys.KeyAction
