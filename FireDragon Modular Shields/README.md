@@ -132,7 +132,7 @@ Bump `version` in `src/mod_info.lua` for every release.
 
 Run `./build.ps1 -Install`, or extract/copy the complete `dist/FireDragon Modular Shields` folder into:
 
-`C:/Users/Rick/Documents/My Games/Gas Powered Games/Supreme Commander Forged Alliance/mods/`
+`%USERPROFILE%/Documents/My Games/Gas Powered Games/Supreme Commander Forged Alliance/mods/`
 
 Keep that folder name: the virtual import path is `/mods/FireDragon Modular Shields/`.
 Enable **FireDragon: Modular Shields** in the FAF simulation mod list. Start with only

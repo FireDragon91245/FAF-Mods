@@ -1,8 +1,8 @@
 name = 'FireDragon: Insta Build Render My Units!'
 uid = '8d221815-6c68-441e-be0d-55c66a6fc37a'
-version = 6
+version = 7
 description = 'Fixes units, factories and upgrades that stay invisible when they are completed instantly (ai_InstaBuild or very fast builds).'
-author = 'Rick'
+author = 'FireDragon91245'
 selectable = true
 enabled = true
 exclusive = false

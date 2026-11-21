@@ -1,8 +1,8 @@
 name = 'FireDragon: Repair Station Control'
 uid = '9b1b4042-3b48-4ea3-a06b-d7c2e21c4931'
-version = 5
+version = 6
 description = 'Per-army assistance controls for engineering stations and build drones.'
-author = 'Rick'
+author = 'FireDragon91245'
 selectable = true
 enabled = true
 exclusive = false

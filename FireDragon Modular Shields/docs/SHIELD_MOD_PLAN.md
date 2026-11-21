@@ -16,7 +16,7 @@ Prioritize an early prototype of nuclear containment, aircraft crash containment
 
 The FAF client had already unpacked the seven shield-related mods in:
 
-`C:/Users/Rick/Documents/My Games/Gas Powered Games/Supreme Commander Forged Alliance/mods`
+`%USERPROFILE%/Documents/My Games/Gas Powered Games/Supreme Commander Forged Alliance/mods`
 
 They were copied locally, including assets, for inspection; that research copy is not kept in this repository. No installed mod was edited, activated, or replaced. The project directory was empty when this investigation began.
 
