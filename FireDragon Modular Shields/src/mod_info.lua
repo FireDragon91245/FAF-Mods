@@ -1,8 +1,9 @@
 name = 'FireDragon: Modular Shields'
 uid = 'bf55b8d0-2026-4115-9000-000000000001'
-version = 42
+version = 43
 description = 'Modular T3/T4 shields: paid assisted installations, repairs, aircraft deflection, nuclear containment and legendary ground/air denial.'
 author = 'FireDragon91245'
+icon = '/mods/FireDragon Modular Shields/icon.png'
 selectable = true
 enabled = true
 exclusive = false

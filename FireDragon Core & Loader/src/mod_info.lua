@@ -1,8 +1,9 @@
 name = 'FireDragon: Core & Loader'
 uid = '3f98ee06-c20c-4fd6-a29e-d7e306fd2026'
-version = 19
+version = 20
 description = 'Core shared UI, storage and Information Exchange libraries, native resource loader and Lua bridge for FireDragon mods. Loads shader techniques and DLL components from firedragonmod.json.'
 author = 'FireDragon91245'
+icon = '/mods/FireDragon Core & Loader/icon.png'
 selectable = true
 enabled = true
 exclusive = false
