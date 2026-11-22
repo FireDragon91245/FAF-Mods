@@ -1,58 +1,44 @@
 local New=assert(loadfile('tests/support/Fixture.lua'))()
-for _,category in ipairs({'NUKE','ANTIMISSILE'}) do
-    local w=New()
-    local drone=w:Unit(1,1,{POD=true,ENGINEER=true})
-    local silo=w:Unit(2,1,{SILO=true,[category]=true});silo.State='SiloBuildingAmmo'
-    local project=w:Unit(3);project.Fraction=.5;project.Position={10,0,0}
-    w.nearby={silo,project};w.C.Track(drone)
-    -- Reproduce enabling the checkbox while native assistance is already active.
-    drone.Focus=silo;drone.Guard=silo;drone.Queue={{commandType=15,target=silo}}
-    local ui=w:Client(1)
-    ui.SetPath(w.S.Key(1),{'DontHelpNukes'},true);w:Deliver()
-    assert(not drone.NativeAuto and drone.AutoModeEnabled,'Suspend native acquisition, preserve requested automation')
-    assert(not drone.Focus and w.clears==1,'Accepted setting stops ongoing assistance immediately')
-    for tick=1,100 do
-        -- Model the competing native selector. This caused the v2 flicker.
-        if drone.NativeAuto and not next(drone.Queue) then w.env.IssueGuard({drone},silo) end
-        w.C.Update(drone)
-    end
-    assert(w.clears==1 and #w.orders==1 and drone.Focus==project,'No repeated stops and useful work is not starved')
-    for _,order in ipairs(w.orders) do assert(order.target~=silo,'Excluded silo must never receive an order') end
-    project.Fraction=1;w.C.Update(drone)
-    local clears=w.clears
-    for tick=1,100 do w.C.Update(drone) end
-    assert(not drone.Focus and w.clears==clears,'Idle beside excluded silos without starting or cancelling work')
-    w:Settings(1,false,false)
-    assert(drone.NativeAuto and drone.AutoModeEnabled,'Restore native automation when filters are removed')
+local w=New()
+local own=w:Unit(1,1,{ENGINEERSTATION=true})
+local other=w:Unit(2,2,{POD=true,ENGINEER=true})
+w.C.Track(own);w.C.Track(other)
+for _,option in ipairs({{true,false,1},{false,true,2},{true,true,3},{false,false,0}}) do
+    w:Settings(1,option[1],option[2])
+    assert(w.workerFlags[1]==option[3] and w.workerFlags[2]==0,'Native filter flags are per army')
+    assert(own.NativeAuto and other.NativeAuto,'Restrictions must never disable native acquisition')
+    for i=1,100 do w.C.Update(own) end
+    assert(#w.orders==0 and w.clears==0,'Lua must never replace the native selector or issue assistance')
 end
-local w=New()
-local own=w:Unit(1,1,{ENGINEERSTATION=true});local other=w:Unit(2,2,{ENGINEERSTATION=true})
-local ally=w:Unit(3,2);ally.Fraction=.5
-w.nearby={ally};w.C.Track(own);w.C.Track(other)
-w:Settings(1,true,false)
-assert(not own.NativeAuto and other.NativeAuto,'Acquisition filtering is per army')
-for i=1,20 do w.C.Update(own) end
-assert(#w.orders==0 and w.clears==0,'Allied projects are filtered before orders')
-own.Focus=ally;own.Paused=true;w:Settings(1,true,true)
-assert(w.clears==1 and not own.Focus,'Settings release prohibited work even while paused')
-local project=w:Unit(4);project.Fraction=.5;w.nearby={project}
-own.Paused=false;own.Queue={{commandType=2}};w.C.Update(own);assert(#w.orders==0,'Manual movement is preserved')
-own.Queue={};w.C.SetAuto(own,false);w.C.Update(own);assert(#w.orders==0 and not own.AutoModeEnabled)
-w.C.SetAuto(own,true);assert(own.AutoModeEnabled and not own.NativeAuto)
-w.C.Update(own);assert(own.Focus==project)
-own.Army=2;own.Queue={};own.Focus=nil;w.C.Update(own)
-assert(own.NativeAuto,'Transfer restores the new army mode')
-print('PASS: pre-acquisition filtering, 200-step no-flicker reproduction, immediate UI setting changes, toggles and transfers')
-local w=New()
-local parent=w:Unit(1,1,{ENGINEERSTATION=true,PODSTAGINGPLATFORM=true})
-local drone=w:Unit(2,1,{POD=true,ENGINEER=true});drone.Parent=parent
-local project=w:Unit(3);project.Fraction=.5;w.nearby={project}
-w.C.Track(drone);w:Settings(1,false,true)
-drone.Queue={{commandType=29}};drone.State='Attached'
-w.C.Update(drone)
-assert(drone.Focus==project and w.clears==1,'Replace the native idle return task to dispatch docked pods')
-w.C.Update(drone);assert(w.clears==1,'Do not continually replace active work')
-local hive=w:Unit(4,1,{ENGINEER=true,ENGINEERSTATION=true})
-w.C.Track(hive);hive.Queue={{commandType=29}}
-w.C.Update(hive)
-assert(hive.Focus==project and w.clears==2,'Hive AssistCommander is also native idle work, not a player order')
+for _,cat in ipairs({'NUKE','ANTIMISSILE'}) do
+    local silo=w:Unit(3,1,{SILO=true,[cat]=true});w.C.Track(silo)
+    assert(w.targetFlags[3]==1)
+    w:Settings(1,false,false)
+    own.Focus=silo;own.Guard=silo;own.Queue={{commandType=29}}
+    w:Settings(1,false,true)
+    assert(not own.Focus and own.NativeAuto,'Settings immediately stop excluded work without disabling native selection')
+    local clears=w.clears
+    for i=1,100 do w.C.Update(own) end
+    assert(w.clears==clears,'No repeated cancellation')
+    w.C.Remove(silo);assert(w.targetFlags[3]==0)
+end
+own.Queue={{commandType=2}};w.C.Update(own);assert(own.Queue[1].commandType==2,'Manual commands remain intact')
+w.C.SetAuto(own,false);assert(not own.NativeAuto and not own.AutoModeEnabled)
+w.C.SetAuto(own,true);assert(own.NativeAuto and own.AutoModeEnabled)
+own.Army=2;w.C.Update(own);assert(w.workerFlags[1]==0,'Transfers adopt new owner policy')
+w.C.Remove(own);assert(w.workerFlags[1]==0)
+w.C.Reset();assert(not next(w.workerFlags) and not next(w.targetFlags),'New sessions clear native metadata')
+print('PASS: native acquisition retained, per-army candidate flags, immediate cancellation, automation, transfers and session reset')
+
+
+local stringId=w:Unit(11,1,{ENGINEERSTATION=true});stringId.EntityId='11'
+w.C.Track(stringId);w:Settings(1,false,true)
+assert(w.workerFlags[11]==2 and w.workerFlags['11']==nil,'Engine string entity IDs are converted at the native boundary')
+
+local native=w:Unit(12,1,{ENGINEERSTATION=true});w.C.Track(native)
+local engineer=w:Unit(13,1,{ENGINEER=true});engineer.Health=50
+local silo=w:Unit(14,1,{SILO=true,NUKE=true});engineer.Focus=silo
+native.Focus=engineer;native.Queue={{commandType=29}}
+local clears=w.clears;w.C.Update(native)
+assert(w.clears==clears,'Native repair of an allowed engineer must not be cancelled because of the engineer work queue')
+native.Focus=silo;w.C.Update(native);assert(w.clears==clears+1,'The actual excluded native repair recipient is still released')

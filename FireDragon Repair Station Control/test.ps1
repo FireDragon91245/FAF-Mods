@@ -33,6 +33,18 @@ try {
     }
     if ($ran -eq 0) { throw "No tests match '$Filter'." }
 
+    $compiler = if ($env:FD_CXX) { $env:FD_CXX } else { 'H:\msys64\mingw32\bin\g++.exe' }
+    $priorPath = $env:PATH
+    try {
+        $env:PATH = (Split-Path -Parent $compiler) + ';' + $env:PATH
+        New-Item -ItemType Directory -Force (Join-Path $root 'artifacts') | Out-Null
+        $nativeTest = Join-Path $root 'artifacts/native-filter-test.exe'
+        & $compiler -m32 -std=c++17 -O2 -Wall -Wextra -static "-I$root/../FireDragon Core & Loader/native/include" (Join-Path $root 'tests/native_filter.cpp') -o $nativeTest
+        if ($LASTEXITCODE) { throw 'Native predicate test build failed.' }
+        & $nativeTest
+        if ($LASTEXITCODE) { throw 'Native predicate tests failed.' }
+    } finally { $env:PATH = $priorPath }
+
     $sources = @(Get-ChildItem -LiteralPath $mod -Recurse -File | Where-Object { $_.Extension -in '.lua','.bp' })
     foreach ($source in $sources) {
         & luac -p $source.FullName

@@ -8,7 +8,7 @@ local project=w:Unit(104);project.Fraction=.5
 w.nearby={helper,project};w.shields={host}
 local A=assert(loadfile('../FireDragon Modular Shields/src/lua/ModularShields/Adapters/Assistance.lua','t',env))()
 C.Track(drone);w:Settings(1,true,true)
-assert(C.Candidate(drone,{})==project,'Never assist invisible aura workers')
+C.Track(helper);assert(w.targetFlags[helper.EntityId]==2,'Native candidate gate excludes invisible aura workers')
 C.Track(helper);assert(not helper.RepairStationControlThread)
 A.AutoDrone(drone);C.Update(drone)
 assert(drone.ModuleAutoAssistHost==host and drone:GetGuardedUnit()==host and w.clears==0)
@@ -19,7 +19,7 @@ C.Update(drone)
 assert(drone.ModularAssistOwner==host and drone.NativeRate==0 and w.clears==0)
 host.Loadout.Queue={};A.ReleaseAll(host);A.AutoDrone(drone)
 assert(not drone.ModularAssistOwner and not drone.ModuleAutoAssistHost and drone.NativeRate==25)
-C.Update(drone);assert(drone:GetGuardedUnit()==project)
+C.Update(drone);assert(drone.NativeAuto,'Native selection resumes after the module claim')
 drone.Queue={};drone.Focus=nil;parent.AutoModeEnabled=false;C.Update(drone)
 assert(not next(drone.Queue),'Do not bypass a disabled Kennel')
 parent.AutoModeEnabled=true;drone.ModularAssistOwner=host;C.Update(drone)
@@ -38,15 +38,15 @@ for i,reverse in ipairs({false,true}) do
     local rsc='src/hook/lua/sim/Unit.lua'
     loadHook(reverse and rsc or shield);loadHook(reverse and shield or rsc)
     local u=w:Unit(200+i,1,{ENGINEERSTATION=true});setmetatable(u,{__index=env.Unit})
-    u:OnCreate();assert(u.Created and u.RepairStationControlThread and not u.NativeAuto)
+    u:OnCreate();assert(u.Created and u.RepairStationControlThread and u.NativeAuto)
     local target={IsUnit=true};u:OnStartReclaim(target)
     assert(target.ModularReclaimers[u.EntityId]==u)
     u:OnStopReclaim(target);assert(not target.ModularReclaimers[u.EntityId])
     u:SetAutoMode(false);assert(not u.AutoModeEnabled and not u.NativeAuto)
-    u:SetAutoMode(true);assert(u.AutoModeEnabled and not u.NativeAuto)
+    u:SetAutoMode(true);assert(u.AutoModeEnabled and u.NativeAuto)
     u:OnDestroy();assert(u.Dead)
 end
-print('PASS: actual shield dispatch/claim lifecycle and both Unit hook load orders with native acquisition suspended')
+print('PASS: actual shield dispatch/claim lifecycle and both Unit hook load orders with native acquisition retained')
 
 -- Real pods sit on AssistCommander (29), not an empty queue. Exercise appended
 -- native orders, both selectors' update orders, and every restriction setting.

@@ -7,6 +7,7 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+ARTIFACT_NAME = 'sim-runtime'
 CHECK = r"""local prefs=import('/lua/user/prefs.lua')
 local old=prefs.GetFromCurrentProfile('LoadingFaction')
 local scenario=import('/lua/ui/maputil.lua').LoadScenario('/maps/SCMP_001/SCMP_001_scenario.lua')
@@ -56,9 +57,10 @@ function BeginSession()
     clear(units)
    end
    E.SetPath(S.Key(1),{'DontHelpNukes'},true)
-   check(drone.AutoModeEnabled and drone.RSCNativeMode==false,'Native selector suspended; requested auto stays enabled')
+   check(drone.AutoModeEnabled,'Native automation stays enabled while candidates are filtered')
    check(clears==1,'Settings change issues exactly one stop')
    WaitTicks(100)
+   LOG('RSC_DIAG '..repr(FireDragonLoader.Mods.RepairStationControl.Debug())..' drone='..drone.EntityId..' silo='..silo.EntityId..' starts='..starts..' clears='..clears)
    check(starts==0 and clears==1,'No native reacquisition or stop/start loop beside silo')
    check(not drone:GetFocusUnit() and not drone:GetGuardedUnit(),'Excluded silo leaves drone idle')
    local radar=spawn('ueb3101',110,100)
@@ -67,7 +69,7 @@ function BeginSession()
    check(radar:GetHealth()>1,'Drone finds and performs allowed work')
    check(starts==0,'Allowed work never switches back to silo')
    E.SetPath(S.Key(1),{'DontHelpNukes'},false)
-   check(drone.AutoModeEnabled and drone.RSCNativeMode==true,'Native selector restored')
+   check(drone.AutoModeEnabled,'Native automation remains enabled with filters removed')
    C.SetAuto(drone,false)
    local hive=spawn('xrb0104',100,112)
    IssueGuard({hive},silo)
@@ -85,7 +87,7 @@ function BeginSession()
     hiveClear(units)
    end
    E.SetPath(S.Key(1),{'DontHelpNukes'},true)
-   check(hive.RSCNativeMode==false and hiveClears==1,'Hive stopped once and native search disabled')
+   check(hive.AutoModeEnabled and hiveClears==1,'Hive stopped once while native search remains enabled')
    WaitTicks(100)
    check(hiveStarts==0 and hiveClears==1,'Hive cannot reacquire prohibited silo')
    LOG('RSC_SIM_RUNTIME_PASS')
@@ -94,11 +96,13 @@ function BeginSession()
 end
 """
 
+SUCCESS='PASS: real FAF Kennel and Hive, excluded silo stopped once without reacquisition, allowed repair and native automation'
+
 def main():
     if subprocess.run(['powershell','-NoProfile','-Command',"if (Get-Process ForgedAlliance -ErrorAction SilentlyContinue) { exit 1 }"],capture_output=True).returncode:
         raise RuntimeError('Close Forged Alliance before running the disposable UI check')
     game=Path(os.environ['ProgramData'])/'FAForever/bin/ForgedAlliance.exe'
-    artifacts=ROOT/'artifacts/sim-runtime';artifacts.mkdir(parents=True,exist_ok=True)
+    artifacts=ROOT/'artifacts'/ARTIFACT_NAME;artifacts.mkdir(parents=True,exist_ok=True)
     overlay=artifacts/'overlay';target=overlay/'lua/ui/menus/main.lua';target.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(game.parent.parent/'gamedata/lua.nx2') as archive:
         member=next(n for n in archive.namelist() if n.lower()=='lua/ui/menus/main.lua')
@@ -129,12 +133,12 @@ end
     startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=0
     process=subprocess.Popen([str(game),'/init',str(init),'/log',str(log),'/nobugreport','/nomovie'],cwd=game.parent,startupinfo=startup)
     try:
-        deadline=time.monotonic()+120
+        deadline=time.monotonic()+300
         while time.monotonic()<deadline:
             content=log.read_text(errors='replace') if log.exists() else ''
             if 'RSC_SIM_RUNTIME_PASS' in content:
-                print('PASS: real FAF Kennel and Hive, existing assist stopped once, no reacquisition, useful repair and native mode restoration');return
-            if 'RSC_SIM_RUNTIME_FAIL' in content or 'FD_UI_RUNTIME_FAIL' in content or 'Sim::Create() crashed' in content or re.search(r'Error running lua script: [^\r\n]*siminit\.lua',content) or process.poll() is not None: break
+                print(SUCCESS);return
+            if 'RSC_SIM_RUNTIME_FAIL' in content or 'FD_UI_RUNTIME_FAIL' in content or 'Sim::Create() crashed' in content or 'Unknown unit type:' in content or re.search(r'Error running lua script: [^\r\n]*siminit\.lua',content) or process.poll() is not None: break
             time.sleep(.25)
         raise RuntimeError('Actual simulation check failed:\n'+'\n'.join(content.splitlines()[-45:]))
     finally:

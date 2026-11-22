@@ -9,7 +9,7 @@ end},{__index=_G})
 local A=assert(loadfile('src/lua/RepairStationControl/AutoUI.lua','t',env))()
 local pod={GetEntityId=function() return 1 end,GetBlueprint=function() return drone.Blueprint end,
     IsAutoMode=function() return drone.NativeAuto end}
-assert(not pod:IsAutoMode() and A.Mode({pod})==true,'UI shows requested state while native acquisition is suspended')
+assert(pod:IsAutoMode() and A.Mode({pod})==true,'UI shows the actual native automation state')
 local previous=0
 local hook=setmetatable({import=function() return {Export=A} end,
     ApplyOverrides=function() previous=previous+1 end},{__index=_G})
@@ -23,7 +23,7 @@ orders.DroneL.behavior(control,{Left=true});assert(delegated==1,'Keep normal dro
 orders.DroneL.behavior(control,{Right=true});w:Deliver();w:Sync()
 assert(not drone.AutoModeEnabled and not drone.NativeAuto and not control.Checked,'Native-off flag must not prevent requested disable')
 orders.DroneL.behavior(control,{Right=true});w:Deliver();w:Sync()
-assert(drone.AutoModeEnabled and not drone.NativeAuto and control.Checked,'Toggle enables only the filtered selector')
+assert(drone.AutoModeEnabled and drone.NativeAuto and control.Checked,'Toggle enables native automation')
 local other=w:Client(2)
 local receipt=other.Sim.Publish('RepairStationControl.SetAuto',{EntityId=1,Enabled=false})
 w:Deliver();w:Sync()

@@ -1,3 +1,5 @@
 dist/
 artifacts/
 __pycache__/
+
+src/dlls/

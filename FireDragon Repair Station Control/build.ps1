@@ -30,6 +30,17 @@ if (-not $PSBoundParameters.ContainsKey('ModsDir')) {
     }
 }
 
+# Compile the native candidate gates against the existing loader ABI.
+$compiler = if ($env:FD_CXX) { $env:FD_CXX } else { 'H:\msys64\mingw32\bin\g++.exe' }
+if (-not (Test-Path -LiteralPath $compiler)) { throw 'Set FD_CXX to a 32-bit MinGW-w64 g++.' }
+New-Item -ItemType Directory -Force (Join-Path $source 'dlls') | Out-Null
+$priorPath = $env:PATH
+$env:PATH = (Split-Path -Parent $compiler) + ';' + $env:PATH
+try {
+    & $compiler -m32 -std=c++17 -O2 -Wall -Wextra -shared -static -static-libgcc -static-libstdc++ '-Wl,--no-insert-timestamp' "-I$root/../FireDragon Core & Loader/native/include" (Join-Path $root 'native/TargetFilter.cpp') -o (Join-Path $source 'dlls/TargetFilter.dll')
+    if ($LASTEXITCODE) { throw 'Native target filter build failed.' }
+} finally { $env:PATH = $priorPath }
+
 if (-not $SkipTests) { & (Join-Path $root 'test.ps1') -ModFolder $name }
 
 Write-Host "== Bundling $out" -ForegroundColor Cyan
