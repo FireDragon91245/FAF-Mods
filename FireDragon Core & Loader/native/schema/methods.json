@@ -1,0 +1,66 @@
+{
+  "methods": [
+    {
+      "owner": "moho::Entity",
+      "name": "IsInCategory",
+      "symbol": "Moho::Entity::IsInCategory",
+      "bridge": "entity_category",
+      "parameters": [
+        {
+          "name": "categoryName",
+          "cpp": "const char*",
+          "kind": "String"
+        }
+      ],
+      "result": {
+        "cpp": "bool",
+        "kind": "Boolean"
+      },
+      "address": 6795344,
+      "size": 110,
+      "fnv": 1514702584
+    },
+    {
+      "owner": "moho::Unit",
+      "name": "GetBlueprint",
+      "symbol": "Moho::Unit::GetBlueprint",
+      "bridge": "thiscall_pointer",
+      "parameters": [],
+      "result": {
+        "kind": "Pointer",
+        "element": "moho::RUnitBlueprint"
+      },
+      "address": 6982432,
+      "size": 4,
+      "fnv": 3234926900
+    },
+    {
+      "owner": "moho::Unit",
+      "name": "GetPosition",
+      "symbol": "Moho::Unit::GetPosition",
+      "bridge": "thiscall_pointer",
+      "parameters": [],
+      "result": {
+        "kind": "Reference",
+        "element": "Wm3::Vector3<float>"
+      },
+      "address": 6965680,
+      "size": 7,
+      "fnv": 3460099412
+    },
+    {
+      "owner": "moho::Unit",
+      "name": "GetTransform",
+      "symbol": "Moho::Unit::GetTransform",
+      "bridge": "thiscall_pointer",
+      "parameters": [],
+      "result": {
+        "kind": "Reference",
+        "element": "moho::VTransform"
+      },
+      "address": 6965696,
+      "size": 7,
+      "fnv": 951150980
+    }
+  ]
+}

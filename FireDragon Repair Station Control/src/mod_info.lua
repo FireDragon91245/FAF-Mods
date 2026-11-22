@@ -1,6 +1,6 @@
 name = 'FireDragon: Repair Station Control'
 uid = '9b1b4042-3b48-4ea3-a06b-d7c2e21c4931'
-version = 8
+version = 16
 description = 'Per-army assistance controls for engineering stations and build drones.'
 author = 'FireDragon91245'
 icon = '/mods/FireDragon Repair Station Control/icon.png'

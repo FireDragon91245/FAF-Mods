@@ -40,24 +40,45 @@ function BeginSession()
     {name='building construction',id='uel0309',construct='ueb1201'},
     {name='damaged building repair',id='ueb1301',repair=true},
    }) do
+    brain:GiveResource('MASS',1000000);brain:GiveResource('ENERGY',10000000)
     for _,f in ipairs(fixtures) do
      C.SetAuto(f.worker,false);IssueClearCommands({f.worker});f.seen={}
-     f.target=spawn(case.id,f.x+9,100)
+     f.target=spawn(case.id,f.x+(case.construct and 4 or 9),100)
      if case.product then IssueBuildFactory({f.target},case.product,1)
      elseif case.upgrade then IssueUpgrade({f.target},case.upgrade)
-     elseif case.construct then brain:BuildStructure(f.target,case.construct,{f.x+9,110,0},false)
+     elseif case.construct then brain:BuildStructure(f.target,case.construct,{f.x+9,100,0},false)
      else f.target:SetHealth(f.worker,1) end
     end
-    WaitTicks(case.construct and 30 or 10)
+    WaitTicks(10)
+    if case.construct then
+     for attempt=1,120 do
+      local started=true
+      for _,f in ipairs(fixtures) do if not f.target:GetFocusUnit() then started=false end end
+      if started then break end
+      brain:GiveResource('MASS',1000000);brain:GiveResource('ENERGY',10000000)
+      WaitTicks(1)
+     end
+    end
     for _,f in ipairs(fixtures) do
      f.focus=f.target:GetFocusUnit()
      if case.construct then check(f.focus,'Engineer started construction '..repr(f.target:GetCommandQueue())) end
      C.SetAuto(f.worker,true)
     end
-    WaitTicks(45)
+    -- Wait for the native task to start, and for a repair economy tick to apply.
+    -- Fixed sleeps race docking/scan cadence; targets stay inside the scan area.
+    local expected=case.product or case.upgrade or case.construct or case.id
+    for attempt=1,120 do
+     local ready=true
+     for _,f in ipairs(fixtures) do
+      if not f.seen[expected] or (case.repair and f.target:GetHealth()<=1) then ready=false end
+     end
+     if ready then break end
+     brain:GiveResource('MASS',1000000);brain:GiveResource('ENERGY',10000000)
+     WaitTicks(1)
+    end
     for _,f in ipairs(fixtures) do
      local expected=case.product or case.upgrade or case.construct or case.id
-     check(f.seen[expected],f.name..' '..case.name..' filters='..repr(options)..' seen='..repr(f.seen)..' focus='..tostring(f.focus and f.focus.UnitId)..' worker='..repr(f.worker:GetCommandQueue()))
+     check(f.seen[expected],f.name..' '..case.name..' filters='..repr(options)..' seen='..repr(f.seen)..' focus='..tostring(f.focus and f.focus.UnitId)..' worker='..repr(f.worker:GetCommandQueue())..' position='..repr(f.worker:GetPosition())..' focusPosition='..repr(f.focus and f.focus:GetPosition())..' native='..repr(FireDragonLoader.Mods.RepairStationControl.Debug()))
      if case.repair then check(f.target:GetHealth()>1,f.name..' repair increases health') end
      LOG('RSC_WORK_PASS '..f.name..' '..case.name..' filters='..repr(options))
      C.SetAuto(f.worker,false);IssueClearCommands({f.worker})

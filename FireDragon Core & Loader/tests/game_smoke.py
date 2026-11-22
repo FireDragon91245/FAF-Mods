@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECK = r'''
 local fd = FireDragonLoader
 assert(fd and fd.IsPresent()==true and type(fd.IsPresent())=='boolean')
-assert(fd.Version()==2 and type(fd.Version())=='number')
+assert(fd.Version()==3 and type(fd.Version())=='number')
 local probe=fd.Mods.FireDragonLuaProbe
 assert(probe and probe.Answer()==42 and probe.Config.enabled)
 assert(probe.Config.nested.value==17 and probe.Config.items[2]=='two')

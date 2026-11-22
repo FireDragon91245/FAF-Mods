@@ -1,16 +1,17 @@
 # FireDragon: Repair Station Control
 
 Army-specific assistance controls for Kennels, Hives, Kennel drones and commander
-engineering pods. Requires **FireDragon: Core & Loader v17 or later**. Enable both
+engineering pods. Requires **FireDragon: Core & Loader v27 or later**. Enable both
 simulation mods in the host's lobby; every player needs them.
 
-Version 8 removes the Lua replacement selector. A native DLL filters the original
-FAF 3841 `CUnitPodAssist` candidate gates, retaining the engine's spatial query
-order, strict nearest-distance comparison, focus resolution, construction and
-upgrade handling, repair/silo dispatch, task lifetime and docking behavior.
-The DLL verifies both acquisition routines before patching them; unsupported or
-modified routines produce an explicit load error. Other game versions need a
-verified native adapter. Both options off leaves the original behavior intact.
+Version 16 uses the generated native engine classes and shared patch SDK. Its DLL
+owns assistance policy, function signatures, injection selectors, register mappings
+and continuations. Core supplies shared game bindings and generic patch scanning,
+assembly, instruction relocation and installation.
+Categories are queried through the engine API, so Lua no longer registers type
+flags for every target. Only managed workers' boolean restrictions cross the
+Lua bridge. The original FAF targeting order and task handling remain intact.
+The initial shared adapter is verified against FAF 3841.
 
 Select one or more of your engineering drones or repair stations, at any level,
 to open the window automatically. Mixed selections containing these units also
@@ -46,7 +47,7 @@ shield's own repair controls.
 Communication, authoritative mirrors, optimistic checkbox bindings and window
 storage use the shared core libraries. No separate networking or storage system
 is installed. The package includes `dlls/TargetFilter.dll` and its resource
-manifest. The existing Core & Loader ABI loads it; the core package is unchanged.
+manifest. Core & Loader v27 supplies the required ABI v5 and native SDK.
 
 Development: `./test.ps1`, then `./build.ps1 -Install`. Source ships from `src/`;
 Lua tests live in `tests/`, and generated packages appear in `dist/`.
@@ -62,10 +63,22 @@ upgrades, construction and damaged-building repair on Kennel drones and Hives,
 with all four option combinations. `test.ps1` also runs the C++ predicate and
 Lua policy/UI/module compatibility tests.
 
-Native investigation: compared the installed executable's disassembly with
-[Draiget/faf-re](https://github.com/Draiget/faf-re/tree/e39c263b85e5a67a12b892ec8bc9893510c6ab57),
-`CUnitPodAssist.cpp`. Nearby acquisition is at `0x0061DA00`, host-focused pod
-acquisition at `0x0061DE50`. The full routines are fingerprinted before four
-candidate gates are patched. No executable file on disk is modified. Build the
-DLL with an x86 MinGW-w64 compiler (`FD_CXX` overrides the default path).
+Native implementation: `native/AssistanceHooks.hpp` owns the FAF 3841 function
+signatures, byte selectors, task/target register mappings and continuation
+signatures. It defines the two stripped functions through Core's generic
+`DefineSymbol` API and installs four `Filter` selectors. Each selector passes `IsAssistanceAllowed` directly through Core's `CallWith`
+API. Register declarations and a generated `CCommandTask::Unit` field projection
+supply its two typed arguments. Core has no assistance-specific
+symbols or injection sites.
+
+`native/TargetFilter.cpp` contains the policy, state and Lua bindings.
+`MeetsRestrictions` evaluates assistance rules without changing filter state.
+`IsAssistanceAllowed` coordinates session synchronization, settings lookup and
+diagnostics under one lock. Core's typed adapter prepares the arguments and applies the declared false-result
+continuation when work is excluded.
+Hook selection and register declarations belong to this consumer; executable
+memory allocation, assembly and patch installation remain in Core. Core's
+`NATIVE_SDK.md` documents the verified engine adapter and injection framework. Build with an x86 MinGW-w64 compiler supporting C++26
+(tested with GCC 15.2.0); `std::optional` tracks the active simulation.
+`FD_CXX` overrides the default compiler path.
 Multiplayer behavior still needs in-game testing.

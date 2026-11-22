@@ -8,7 +8,7 @@ local project=w:Unit(104);project.Fraction=.5
 w.nearby={helper,project};w.shields={host}
 local A=assert(loadfile('../FireDragon Modular Shields/src/lua/ModularShields/Adapters/Assistance.lua','t',env))()
 C.Track(drone);w:Settings(1,true,true)
-C.Track(helper);assert(w.targetFlags[helper.EntityId]==2,'Native candidate gate excludes invisible aura workers')
+C.Track(helper);assert(not w.workerSettings[helper.EntityId],'Invisible helpers are not managed workers')
 C.Track(helper);assert(not helper.RepairStationControlThread)
 A.AutoDrone(drone);C.Update(drone)
 assert(drone.ModuleAutoAssistHost==host and drone:GetGuardedUnit()==host and w.clears==0)

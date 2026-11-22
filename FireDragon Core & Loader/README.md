@@ -1,3 +1,13 @@
+Native SDK v5 (Core mod v27, DLL ABI v5) provides generated native engine classes
+and reusable `Start`, `End`, `Call`, `Offset`, `Filter` and `Detour` patching.
+Names resolve dynamically from loaded-module exports/PDBs; stripped functions
+use consumer-supplied signatures. Mods own where to inject, byte selectors,
+register/stack argument mappings and continuations. Core owns decoding,
+relocation, CPU-state preservation and transactional installation. Typed `CallWith` declarations adapt saved registers, stack values and generated
+engine-field projections to ordinary C++ callbacks. Rebuild native consumers
+against SDK v5. See [Native SDK](src/NATIVE_SDK.md)
+(installed: `NATIVE_SDK.md`).
+
 The loader also installs as a normal FAF core mod. Enable **FireDragon: Core & Loader** alongside FireDragon mods. Its standalone shared UI library provides windows, tabs, clipping, scrolling, layouts, controls, live bindings and image effects. See [UI library API](src/UI_LIBRARY.md) (installed package: `UI_LIBRARY.md`). Mods can save local data across sessions with the [shared storage API](src/STORAGE_API.md) (installed package: `STORAGE_API.md`). Version 8 adds the [Information Exchange API](src/INFORMATION_EXCHANGE_API.md): observable configuration, notifications and nonblocking request/reply, shared across mods within each Lua runtime. Version 7 moved UI window geometry into shared storage without migrating old preferences.
 
 Version 9 makes notification delivery configurable (`Broadcast` or shared `Consume`), adds safe peek/take operations, and supports either all request replies or the first successful reply with exclusive responder claims.
@@ -121,8 +131,8 @@ FD_MOD_ENTRY(ModularShields, EngineHooks) {
 This expands to an `extern "C"` exported `int __cdecl` function receiving
 `const FDModContext*`. Success is **0**, failure is nonzero. The context supplies
 its byte size, ABI version, stable mod name, absolute UTF-16 mod directory and a
-logging callback and the centrally managed `lua` registration service. SDK ABI v2
-adds that service; rebuild native components against the v2 header and check
+logging callback and the centrally managed `lua` registration service. SDK ABI v5
+provides the engine and dynamic patch services; rebuild native components against the v5 header and check
 `context->apiVersion`/`structSize`. The context and its borrowed pointers remain valid for the
 process lifetime. Do not pass C++ objects, allocator ownership or exceptions across
 this ABI. Build plugins with a static runtime or ship their own dependencies.
@@ -149,7 +159,7 @@ including User/UI and Sim. New/recreated states receive the same registrations:
 
 ```lua
 FireDragonLoader.IsPresent()   -- boolean true; table is absent without the bridge
-FireDragonLoader.Version()     -- integer-valued Lua number, currently 2
+FireDragonLoader.Version()     -- integer-valued Lua number, currently 3
 FireDragonLoader.LoadedMods()  -- array of {name, version, dlls, shaders}
 FireDragonLoader.Logs()        -- array of {level, msg}
 FireDragonLoader.Mods          -- plugin-owned namespaces
@@ -275,8 +285,10 @@ and `AVAILABLE`. Runtime does not read any repository/source paths.
 ./build.ps1 -SkipTests      # incremental build/package only
 ```
 
-Requires Windows, CMake, Ninja, Python for the test runner, Lua/luac for mod metadata,
-and 32-bit MinGW-w64 GCC with D3DX9 headers/import libraries. Supply `-Compiler` or
+Requires Windows, CMake 3.25 or later with C++26 toolchain support, Ninja,
+Python for the test runner, Lua/luac for mod metadata, and 32-bit MinGW-w64 GCC
+with D3DX9 headers/import libraries. Builds use `-std=c++26`; GCC 15.2.0 and
+CMake 4.1.1 are the tested combination. Supply `-Compiler` or
 `FD_CXX` for a nondefault toolchain. nlohmann/json 3.12.0 is vendored with its MIT
 license and upstream-verified SHA-256. MinHook and the test-only FAF Lua source
 are pinned in their vendored `UPSTREAM.json` files; no network access is needed to build.

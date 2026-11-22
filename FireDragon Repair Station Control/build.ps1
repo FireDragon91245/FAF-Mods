@@ -37,7 +37,7 @@ New-Item -ItemType Directory -Force (Join-Path $source 'dlls') | Out-Null
 $priorPath = $env:PATH
 $env:PATH = (Split-Path -Parent $compiler) + ';' + $env:PATH
 try {
-    & $compiler -m32 -std=c++17 -O2 -Wall -Wextra -shared -static -static-libgcc -static-libstdc++ '-Wl,--no-insert-timestamp' "-I$root/../FireDragon Core & Loader/native/include" (Join-Path $root 'native/TargetFilter.cpp') -o (Join-Path $source 'dlls/TargetFilter.dll')
+    & $compiler -m32 -std=c++26 -O2 -Wall -Wextra -shared -static -static-libgcc -static-libstdc++ '-Wl,--no-insert-timestamp' "-I$root/../FireDragon Core & Loader/native/include" (Join-Path $root 'native/TargetFilter.cpp') -o (Join-Path $source 'dlls/TargetFilter.dll')
     if ($LASTEXITCODE) { throw 'Native target filter build failed.' }
 } finally { $env:PATH = $priorPath }
 

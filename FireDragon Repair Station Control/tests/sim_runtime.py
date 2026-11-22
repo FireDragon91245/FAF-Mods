@@ -138,7 +138,7 @@ end
             content=log.read_text(errors='replace') if log.exists() else ''
             if 'RSC_SIM_RUNTIME_PASS' in content:
                 print(SUCCESS);return
-            if 'RSC_SIM_RUNTIME_FAIL' in content or 'FD_UI_RUNTIME_FAIL' in content or 'Sim::Create() crashed' in content or 'Unknown unit type:' in content or re.search(r'Error running lua script: [^\r\n]*siminit\.lua',content) or process.poll() is not None: break
+            if 'BeginSession() failed:' in content or 'RSC_SIM_RUNTIME_FAIL' in content or 'FD_UI_RUNTIME_FAIL' in content or 'Sim::Create() crashed' in content or 'Unknown unit type:' in content or re.search(r'Error running lua script: [^\r\n]*siminit\.lua',content) or process.poll() is not None: break
             time.sleep(.25)
         raise RuntimeError('Actual simulation check failed:\n'+'\n'.join(content.splitlines()[-45:]))
     finally:

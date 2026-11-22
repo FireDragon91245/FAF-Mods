@@ -39,7 +39,7 @@ try {
         $env:PATH = (Split-Path -Parent $compiler) + ';' + $env:PATH
         New-Item -ItemType Directory -Force (Join-Path $root 'artifacts') | Out-Null
         $nativeTest = Join-Path $root 'artifacts/native-filter-test.exe'
-        & $compiler -m32 -std=c++17 -O2 -Wall -Wextra -static "-I$root/../FireDragon Core & Loader/native/include" (Join-Path $root 'tests/native_filter.cpp') -o $nativeTest
+        & $compiler -m32 -std=c++26 -O2 -Wall -Wextra -static "-I$root/../FireDragon Core & Loader/native/include" (Join-Path $root 'tests/native_filter.cpp') -o $nativeTest
         if ($LASTEXITCODE) { throw 'Native predicate test build failed.' }
         & $nativeTest
         if ($LASTEXITCODE) { throw 'Native predicate tests failed.' }

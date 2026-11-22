@@ -7,6 +7,11 @@ $ErrorActionPreference = 'Stop'
 if (-not $SkipBuild) { & (Join-Path $PSScriptRoot 'build.ps1') -SkipTests }
 & (Join-Path $PSScriptRoot 'dist\resource-test.exe')
 if ($LASTEXITCODE) { throw 'Native resource contract tests failed' }
+$nativeArguments = @()
+$pdbFixture = Join-Path $PSScriptRoot 'dist\SymbolFixture.dll'
+if (Test-Path -LiteralPath $pdbFixture) { $nativeArguments += $pdbFixture }
+& (Join-Path $PSScriptRoot 'dist\native-test.exe') @nativeArguments
+if ($LASTEXITCODE) { throw 'Native SDK and injection framework tests failed' }
 & (Join-Path $PSScriptRoot 'dist\lua-test.exe')
 if ($LASTEXITCODE) { throw 'Native Lua bridge tests failed' }
 $arguments = @('-B', (Join-Path $PSScriptRoot 'tests\run.py'), '--archive', $EffectsArchive)
@@ -28,6 +33,8 @@ try {
     if ($LASTEXITCODE) { throw 'Shared storage contract tests failed' }
     & lua tests/ui.lua
     if ($LASTEXITCODE) { throw 'Shared UI contract tests failed' }
+    & lua tests/engine.lua
+    if ($LASTEXITCODE) { throw 'Shared engine command tests failed' }
     foreach ($source in Get-ChildItem (Join-Path $PSScriptRoot 'src') -Recurse -Filter *.lua) {
         & luac -p $source.FullName
         if ($LASTEXITCODE) { throw "Lua syntax failed: $($source.FullName)" }

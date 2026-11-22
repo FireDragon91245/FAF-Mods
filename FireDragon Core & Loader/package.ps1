@@ -10,7 +10,14 @@ if ($obsolete -ne $expected) { throw 'Unexpected obsolete package path' }
 if (Test-Path -LiteralPath $obsolete) { Remove-Item -LiteralPath $obsolete -Recurse -Force }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'dist\FireDragonLoader.dll') -Destination (Join-Path $package 'bin\FireDragonLoader.dll')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'dist\dsound.dll') -Destination (Join-Path $package 'bootstrap\dsound.dll')
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\include\FireDragonLoader.h') -Destination (Join-Path $package 'sdk\FireDragonLoader.h')
+# Retire the handwritten facade from this verified package output.
+foreach ($name in 'FireDragonNative.h','FireDragonNative.hpp') {
+    $obsoleteHeader = Join-Path $package "sdk\$name"
+    if (Test-Path -LiteralPath $obsoleteHeader) { Remove-Item -LiteralPath $obsoleteHeader -Force }
+}
+Copy-Item (Join-Path $PSScriptRoot 'native\include\FireDragon*.h*') -Destination (Join-Path $package 'sdk') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\schema\faf3841.fields.json') -Destination (Join-Path $package 'sdk\faf3841.fields.json') -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\schema\methods.json') -Destination (Join-Path $package 'sdk\methods.json') -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\include\firedragonmod.schema.json') -Destination (Join-Path $package 'sdk\firedragonmod.schema.json')
 Copy-Item (Join-Path $PSScriptRoot 'examples\*') -Destination (Join-Path $package 'examples')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'native\third_party\nlohmann\LICENSE.MIT') -Destination (Join-Path $package 'licenses\nlohmann-json-LICENSE.MIT')

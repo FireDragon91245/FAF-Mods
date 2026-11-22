@@ -8,7 +8,6 @@
 # User communication preferences
 
 - Use FireDragon91245 for the user's name, author credits, and public references. Never use their legal name outside explicitly identified work environments.
-
 - Change code, files, or settings only when the user asks for a change or clearly authorizes that work.
 - Treat explanations, reasoning, corrections of understanding, and questions as discussion, not as implicit requests to modify anything.
 - In an ongoing task, a user's explanation of why an approach is right or wrong does not itself authorize another implementation change.

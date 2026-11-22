@@ -1,1 +1,3 @@
-extern "C" __declspec(dllexport) int FDFixtureDependency() { return 42; }
+extern "C" __declspec(dllexport) int FDFixtureDependency() {
+    return 42;
+}

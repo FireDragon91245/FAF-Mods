@@ -1,30 +1,26 @@
 local Policy=import('/mods/FireDragon Repair Station Control/lua/RepairStationControl/Policy.lua').Export
 local Settings=import('/mods/FireDragon Repair Station Control/lua/RepairStationControl/Settings.lua').Export
 local Exchange=import('/mods/FireDragon Core & Loader/lua/FireDragon/InformationExchange.lua').Export
+local Engine=import('/mods/FireDragon Core & Loader/lua/FireDragon/Engine.lua').Export
 local units={}
 local function Bridge()
     local native=FireDragonLoader and FireDragonLoader.Mods and FireDragonLoader.Mods.RepairStationControl
-    assert(native and native.Worker and native.Target,'Repair Station Control requires its native TargetFilter DLL and a supported FAF executable')
+    assert(native and native.SetRestrictions and native.ForgetWorker,'Repair Station Control requires its native TargetFilter DLL and a supported FAF executable')
     return native
 end
 local function Publish(unit)
     Exchange.UI.PublishState('RepairStationControl.Auto',unit.EntityId,{Enabled=unit.AutoModeEnabled==true},{army=unit.Army})
 end
 local function Configure(unit,settings)
-    -- Never replace native acquisition. Only the two policy bits enter its
+    -- Never replace native acquisition. Boolean restrictions enter the shared
     -- candidate gates; all native ranking, task dispatch and docking survive.
-    Bridge().Worker(tonumber(unit.EntityId),(settings.DontHelpTeam and 1 or 0)+(settings.DontHelpNukes and 2 or 0))
+    Bridge().SetRestrictions(tonumber(unit.EntityId),settings.DontHelpTeam,settings.DontHelpNukes)
     unit.RSCArmy=unit.Army
     Publish(unit)
 end
-local function NativeIdle(unit)
-    local queue=unit:GetCommandQueue() or {}
-    local cats=unit.Blueprint.CategoriesHash
-    return (cats.ENGINEERSTATION or (unit.Parent and cats.POD)) and table.getn(queue)==1 and queue[1].commandType==29
-end
 local function Reconcile(unit,settings)
     local focus,guarded=unit:GetFocusUnit(),unit:GetGuardedUnit()
-    local idle=NativeIdle(unit)
+    local idle=Engine.IsAutomaticAssistance(unit)
     local allowed=idle and Policy.DirectAllowed or Policy.Allowed
     if (focus and not allowed(unit,focus,settings)) or
         (guarded and not idle and not Policy.Allowed(unit,guarded,settings)) then
@@ -50,8 +46,6 @@ local function AutoEvent(unit,enabled)
     Publish(unit)
 end
 local function Track(unit)
-    local cats=unit.Blueprint.CategoriesHash or {}
-    Bridge().Target(tonumber(unit.EntityId),(Policy.Silo(unit) and 1 or 0)+(cats.INSIGNIFICANTUNIT and 2 or 0))
     if not Policy.Managed(unit) or units[unit.EntityId] then return end
     units[unit.EntityId]=unit
     if unit.AutoModeEnabled==nil then unit.AutoModeEnabled=(unit.Blueprint.AI or {}).InitialAutoMode==true end
@@ -85,8 +79,8 @@ local function Start()
 end
 Export={Track=Track,Update=Update,ApplyArmy=ApplyArmy,SetAuto=SetAuto,AutoEvent=AutoEvent,Start=Start,Reset=Reset,
     Remove=function(unit)
-        Bridge().Worker(tonumber(unit.EntityId),0);Bridge().Target(tonumber(unit.EntityId),0)
         if not units[unit.EntityId] then return end
+        Bridge().ForgetWorker(tonumber(unit.EntityId))
         units[unit.EntityId]=nil
         Exchange.UI.PublishState('RepairStationControl.Auto',unit.EntityId,nil,{army=unit.Army})
     end}

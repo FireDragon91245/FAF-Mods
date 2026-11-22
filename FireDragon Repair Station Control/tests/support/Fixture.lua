@@ -12,13 +12,14 @@ return function()
     local env=setmetatable({categories={ALLUNITS=1,MODULARSHIELD=2},WaitTicks=function() end,
         IsAlly=function(a,b) return a==b or b==2 end,IsDestroyed=function(u) return not u or u.Dead end,
         GetEntityById=function(id) return w.units[id] end}, {__index=_G})
-    w.workerFlags={};w.targetFlags={}
+    w.workerSettings={}
     env.FireDragonLoader={Mods={RepairStationControl={
-        Worker=function(id,flags) w.workerFlags[id]=flags end,
-        Target=function(id,flags) w.targetFlags[id]=flags end,
-        Reset=function() w.workerFlags={};w.targetFlags={} end,
+        SetRestrictions=function(id,team,nukes) w.workerSettings[id]={DontHelpTeam=team,DontHelpNukes=nukes} end,
+        ForgetWorker=function(id) w.workerSettings[id]=nil end,
+        Reset=function() w.workerSettings={} end,
     }}}
     function env.import(path)
+        if path:find('/FireDragon/Engine.lua',1,true) then return {Export=assert(loadfile('../FireDragon Core & Loader/src/lua/FireDragon/Engine.lua','t',env))()} end
         if path:find('InformationExchange.lua',1,true) then return {Export=E} end
         if path:find('Policy.lua',1,true) then return {Export=P} end
         if path:find('Settings.lua',1,true) then return {Export=S} end

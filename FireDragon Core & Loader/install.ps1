@@ -74,7 +74,9 @@ $files = @()
 foreach ($copy in $copies) {
     New-Item -ItemType Directory (Split-Path -Parent $copy.Path) -Force | Out-Null
     if ([IO.Path]::GetFullPath($copy.Source) -ne [IO.Path]::GetFullPath($copy.Path)) { Copy-Item -LiteralPath $copy.Source -Destination $copy.Path -Force }
-    $files += @{ Path=$copy.Path; Hash=(Get-SHA256 $copy.Path) }
+    $installedHash=Get-SHA256 $copy.Path
+    if ($installedHash -ne (Get-SHA256 $copy.Source)) { throw "Installed package hash mismatch: $($copy.Path)" }
+    $files += @{ Path=$copy.Path; Hash=$installedHash }
 }
 foreach ($config in $configs) {
     Set-Content -LiteralPath $config -Value "[Loader]`r`nLoaderPath=$(Join-Path $modTarget 'bin\FireDragonLoader.dll')`r`nModsDirectory=$ModsDirectory" -Encoding Unicode
@@ -89,6 +91,6 @@ foreach ($path in $originals.Keys) {
     if ((Get-SHA256 $path) -ne $originals[$path]) { throw "Unexpected managed file change: $path" }
 }
 New-Item -ItemType Directory (Split-Path -Parent $receiptFile) -Force | Out-Null
-@{ Version='2'; Files=$files; ManagedFileHashes=$originals } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $receiptFile -Encoding utf8
+@{ Version='3'; Files=$files; ManagedFileHashes=$originals } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $receiptFile -Encoding utf8
 Write-Host "Installed FireDragonModLoader mod and bootstrap in $($bins.Count) FAF binary directories. $($originals.Count) managed hashes unchanged."
 Write-Host 'No managed archive/executable/init file or game launch setting was modified.'
